@@ -1,0 +1,16 @@
+import type { ModuleDefinition } from "@holovant/module-contracts";
+import { createMockProvider } from "@/lib/createMockProvider";
+
+export interface AiSnapshot {
+  status: "idle" | "listening" | "thinking" | "speaking";
+}
+
+export const aiModule: ModuleDefinition<AiSnapshot> = {
+  id: "ai",
+  label: "AI",
+  tagline: "Knowledge & reasoning",
+  themeColor: "#5b8cff",
+  dataProvider: createMockProvider<AiSnapshot>({
+    status: "idle",
+  }),
+};

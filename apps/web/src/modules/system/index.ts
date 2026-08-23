@@ -1,0 +1,20 @@
+import type { ModuleDefinition } from "@holovant/module-contracts";
+import { createMockProvider } from "@/lib/createMockProvider";
+
+export interface SystemSnapshot {
+  cpuPct: number;
+  gpuPct: number;
+  memoryPct: number;
+}
+
+export const systemModule: ModuleDefinition<SystemSnapshot> = {
+  id: "system",
+  label: "System",
+  tagline: "Diagnostics",
+  themeColor: "#5b8cff",
+  dataProvider: createMockProvider<SystemSnapshot>({
+    cpuPct: 18,
+    gpuPct: 34,
+    memoryPct: 52,
+  }),
+};
