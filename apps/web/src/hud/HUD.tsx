@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { useGestureStore } from "@/stores/gestureStore";
 import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
-import { HandPreview } from "./HandPreview";
+import { CameraFeed } from "./CameraFeed";
 import { moduleRegistry } from "@/modules/registry";
 
 function useClock() {
@@ -95,12 +95,9 @@ export function HUD() {
         <div className="text-[10px] text-mist tracking-wide">
           {status === "active" ? "HAND TRACKING ACTIVE" : "MOUSE FALLBACK ACTIVE"}
         </div>
-        {status === "active" && (
-          <div className="mt-3 h-[150px] w-[200px]" aria-hidden />
-        )}
       </div>
 
-      <HandPreview videoRef={videoRef} visible={status === "active" || status === "starting"} />
+      <CameraFeed videoRef={videoRef} />
     </div>
   );
 }

@@ -5,7 +5,6 @@ import { useOrbitStore, getFrontModuleId } from "@/stores/orbitStore";
 import { useGestureStore, setTrackingStatus, setGestureReading, setTrackingError } from "@/stores/gestureStore";
 import { HandTrackingEngine, describeTrackingError, type HandPoint } from "@/gestures/engine/handTracking";
 import { pinchDistance, PINCH_THRESHOLD } from "@/gestures/classifiers/pinch";
-import { publishLandmarks } from "@/gestures/landmarkFeed";
 
 /** Degrees of carousel travel per full frame-width of hand movement. */
 const ROTATION_SENSITIVITY = 300;
@@ -31,7 +30,6 @@ export function useHandTrackingAdapter() {
   const lastReadoutAt = useRef(0);
 
   const handleResult = useCallback((hand: HandPoint[] | null) => {
-    publishLandmarks(hand);
     const now = performance.now();
 
     if (!hand) {
@@ -101,7 +99,6 @@ export function useHandTrackingAdapter() {
   const disable = useCallback(() => {
     engineRef.current?.stop();
     engineRef.current = null;
-    publishLandmarks(null);
     setTrackingStatus("off");
     setGestureReading(null, 0);
   }, []);
