@@ -1,5 +1,9 @@
 import type { ModuleDefinition } from "@holovant/module-contracts";
 import { instagramModule } from "./instagram";
+import { tiktokModule } from "./tiktok";
+import { youtubeModule } from "./youtube";
+import { xModule } from "./x";
+import { linkedinModule } from "./linkedin";
 import { stocksModule } from "./stocks";
 import { projectsModule } from "./projects";
 import { sportsModule } from "./sports";
@@ -17,6 +21,10 @@ import { systemModule } from "./system";
  */
 export const moduleRegistry: ModuleDefinition[] = [
   instagramModule,
+  tiktokModule,
+  youtubeModule,
+  xModule,
+  linkedinModule,
   stocksModule,
   projectsModule,
   sportsModule,

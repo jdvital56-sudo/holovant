@@ -33,15 +33,15 @@ export function HolographicCard({ module, x, z, rotationY, depthFactor }: Hologr
           onPointerEnter={() => setHovered(module.id)}
           onPointerLeave={() => setHovered(null)}
           className={[
-            "relative w-[190px] h-[130px] rounded-2xl px-4 py-3 cursor-pointer select-none",
+            "relative w-[190px] h-[230px] rounded-2xl px-4 py-3 cursor-pointer select-none",
             "flex flex-col justify-between font-display",
             "bg-[rgba(16,24,38,0.5)] backdrop-blur-md",
             "border transition-[border-color,box-shadow,transform] duration-300",
             isSelected
-              ? "border-signal/70 shadow-[0_10px_40px_rgba(0,0,0,0.55),0_0_50px_rgba(111,179,255,0.28)] scale-105"
+              ? "border-signal/70 shadow-[0_10px_40px_rgba(0,0,0,0.55),0_0_60px_rgba(111,179,255,0.35)] scale-105"
               : isHovered
-                ? "border-signal/50 shadow-[0_8px_30px_rgba(0,0,0,0.5),0_0_28px_rgba(111,179,255,0.16)]"
-                : "border-[rgba(143,178,222,0.16)] shadow-[0_8px_30px_rgba(0,0,0,0.45)]",
+                ? "border-signal/50 shadow-[0_8px_30px_rgba(0,0,0,0.5),0_0_40px_rgba(111,179,255,0.22)]"
+                : "border-[rgba(143,178,222,0.2)] shadow-[0_8px_30px_rgba(0,0,0,0.45),0_0_26px_rgba(111,179,255,0.1)]",
           ].join(" ")}
           style={{ opacity }}
         >

@@ -1,5 +1,9 @@
 export type ModuleId =
   | "instagram"
+  | "tiktok"
+  | "youtube"
+  | "x"
+  | "linkedin"
   | "stocks"
   | "projects"
   | "sports"
