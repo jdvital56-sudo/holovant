@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useOrbitStore } from "@/stores/orbitStore";
+import { useGestureStore } from "@/stores/gestureStore";
+import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
 import { moduleRegistry } from "@/modules/registry";
 
 function useClock() {
@@ -23,10 +25,21 @@ function pad(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  off: "OFF",
+  starting: "STARTING…",
+  active: "ON",
+  error: "ERROR",
+};
+
 export function HUD() {
   const now = useClock();
   const selectedId = useOrbitStore((s) => s.selectedId);
   const selectedModule = moduleRegistry.find((m) => m.id === selectedId);
+  const { status, enable, disable } = useHandTrackingAdapter();
+  const currentGesture = useGestureStore((s) => s.currentGesture);
+  const confidence = useGestureStore((s) => s.confidence);
+  const errorMessage = useGestureStore((s) => s.errorMessage);
 
   return (
     <div className="fixed inset-0 z-10 pointer-events-none p-4 sm:p-8 grid grid-cols-2 grid-rows-[auto_1fr_auto] font-mono">
@@ -38,9 +51,16 @@ export function HUD() {
         <div className="text-[11px] text-mist mt-1">
           60 <span className="text-frost">FPS</span> &nbsp;&middot;&nbsp; GPU <span className="text-frost">NOMINAL</span>
         </div>
-        <div className="text-[11px] text-mist">
-          TRACKING &mdash; <span className="text-frost">OFF</span>
-        </div>
+        <button
+          type="button"
+          onClick={status === "off" || status === "error" ? enable : disable}
+          className="text-[11px] text-mist mt-1 hover:text-frost transition-colors cursor-pointer"
+        >
+          TRACKING &mdash;{" "}
+          <span className={status === "active" ? "text-signal" : "text-frost"}>{STATUS_LABEL[status]}</span>
+          <span className="text-mist/60"> (click to {status === "off" || status === "error" ? "enable" : "disable"})</span>
+        </button>
+        {errorMessage && <div className="text-[10px] text-warn mt-1 max-w-[220px]">{errorMessage}</div>}
       </div>
 
       <div className="pointer-events-auto col-start-2 row-start-1 justify-self-end text-right">
@@ -67,11 +87,13 @@ export function HUD() {
 
       <div className="pointer-events-auto col-start-2 row-start-3 self-end justify-self-end text-right">
         <div className="text-[10px] tracking-widest uppercase text-mist mb-2">Gesture</div>
-        <div className="text-[13px] text-frost">&mdash; idle</div>
+        <div className="text-[13px] text-frost">&mdash; {currentGesture ?? "idle"}</div>
         <div className="w-[140px] h-[3px] bg-white/10 my-2 rounded-full overflow-hidden ml-auto">
-          <div className="h-full bg-signal-dim w-0" />
+          <div className="h-full bg-signal-dim transition-[width] duration-150" style={{ width: `${Math.round(confidence * 100)}%` }} />
         </div>
-        <div className="text-[10px] text-mist tracking-wide">MOUSE FALLBACK ACTIVE</div>
+        <div className="text-[10px] text-mist tracking-wide">
+          {status === "active" ? "HAND TRACKING ACTIVE" : "MOUSE FALLBACK ACTIVE"}
+        </div>
       </div>
     </div>
   );
