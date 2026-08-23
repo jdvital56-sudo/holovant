@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { useGestureStore } from "@/stores/gestureStore";
 import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
+import { HandPreview } from "./HandPreview";
 import { moduleRegistry } from "@/modules/registry";
 
 function useClock() {
@@ -36,7 +37,7 @@ export function HUD() {
   const now = useClock();
   const selectedId = useOrbitStore((s) => s.selectedId);
   const selectedModule = moduleRegistry.find((m) => m.id === selectedId);
-  const { status, enable, disable } = useHandTrackingAdapter();
+  const { status, enable, disable, videoRef } = useHandTrackingAdapter();
   const currentGesture = useGestureStore((s) => s.currentGesture);
   const confidence = useGestureStore((s) => s.confidence);
   const errorMessage = useGestureStore((s) => s.errorMessage);
@@ -94,7 +95,12 @@ export function HUD() {
         <div className="text-[10px] text-mist tracking-wide">
           {status === "active" ? "HAND TRACKING ACTIVE" : "MOUSE FALLBACK ACTIVE"}
         </div>
+        {status === "active" && (
+          <div className="mt-3 h-[150px] w-[200px]" aria-hidden />
+        )}
       </div>
+
+      <HandPreview videoRef={videoRef} visible={status === "active" || status === "starting"} />
     </div>
   );
 }

@@ -13,18 +13,30 @@ let landmarkerPromise: Promise<HandLandmarker> | null = null;
 /**
  * Loads MediaPipe only when tracking is actually switched on. Users who never
  * enable hand tracking — the default — never download the vision library.
+ * Falls back to CPU inference when the GPU delegate is unavailable, which
+ * otherwise fails on some drivers with no hand ever being reported.
  */
 function getLandmarker() {
   if (!landmarkerPromise) {
-    landmarkerPromise = import("@mediapipe/tasks-vision").then(({ FilesetResolver, HandLandmarker }) =>
-      FilesetResolver.forVisionTasks(WASM_BASE).then((vision) =>
-        HandLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
-          runningMode: "VIDEO",
-          numHands: 1,
-        }),
-      ),
-    );
+    landmarkerPromise = import("@mediapipe/tasks-vision").then(async ({ FilesetResolver, HandLandmarker }) => {
+      const vision = await FilesetResolver.forVisionTasks(WASM_BASE);
+      const options = {
+        baseOptions: { modelAssetPath: MODEL_URL },
+        runningMode: "VIDEO" as const,
+        numHands: 1,
+      };
+      try {
+        return await HandLandmarker.createFromOptions(vision, {
+          ...options,
+          baseOptions: { ...options.baseOptions, delegate: "GPU" as const },
+        });
+      } catch {
+        return HandLandmarker.createFromOptions(vision, {
+          ...options,
+          baseOptions: { ...options.baseOptions, delegate: "CPU" as const },
+        });
+      }
+    });
   }
   return landmarkerPromise;
 }
@@ -38,35 +50,68 @@ export function describeTrackingError(err: unknown): string {
     if (err.name === "NotFoundError") return "No camera found on this device.";
     if (err.name === "NotReadableError") return "Camera is already in use by another app.";
   }
+  if (err instanceof Error && err.message) return err.message;
   return "Could not start hand tracking.";
 }
 
 export class HandTrackingEngine {
-  private video: HTMLVideoElement | null = null;
   private stream: MediaStream | null = null;
   private rafId: number | null = null;
   private stopped = true;
+  private video: HTMLVideoElement | null = null;
 
-  async start(onResult: (landmarks: HandPoint[] | null) => void) {
+  /**
+   * Drives detection off a video element owned by the React tree. Keeping the
+   * element mounted (rather than creating a detached one) is what guarantees
+   * the browser actually decodes frames for it.
+   */
+  async start(video: HTMLVideoElement, onResult: (landmarks: HandPoint[] | null) => void) {
     this.stopped = false;
-    const landmarker = await getLandmarker();
+    this.video = video;
 
     this.stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 480, height: 360 },
+      video: { width: { ideal: 640 }, height: { ideal: 480 } },
       audio: false,
     });
-    const video = document.createElement("video");
+    if (this.stopped) {
+      this.stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+
     video.srcObject = this.stream;
     video.muted = true;
     video.playsInline = true;
     await video.play();
-    this.video = video;
 
+    // play() can resolve before the first frame has dimensions; detection on a
+    // zero-sized frame silently yields no hands forever.
+    if (!video.videoWidth) {
+      await new Promise<void>((resolve) => {
+        const done = () => resolve();
+        video.addEventListener("loadeddata", done, { once: true });
+        setTimeout(done, 3000);
+      });
+    }
+
+    const landmarker = await getLandmarker();
+    if (this.stopped) return;
+
+    let lastTimestamp = -1;
     const loop = () => {
       if (this.stopped || !this.video) return;
-      const result = landmarker.detectForVideo(this.video, performance.now());
-      const hand = result.landmarks?.[0] ?? null;
-      onResult(hand ? hand.map((p): HandPoint => [p.x, p.y, p.z]) : null);
+      const v = this.video;
+      if (v.videoWidth > 0 && v.readyState >= 2) {
+        // detectForVideo requires strictly increasing timestamps.
+        const ts = Math.max(performance.now(), lastTimestamp + 1);
+        lastTimestamp = ts;
+        try {
+          const result = landmarker.detectForVideo(v, ts);
+          const hand = result.landmarks?.[0] ?? null;
+          onResult(hand ? hand.map((p): HandPoint => [p.x, p.y, p.z]) : null);
+        } catch {
+          onResult(null);
+        }
+      }
       this.rafId = requestAnimationFrame(loop);
     };
     this.rafId = requestAnimationFrame(loop);
@@ -75,7 +120,9 @@ export class HandTrackingEngine {
   stop() {
     this.stopped = true;
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+    this.rafId = null;
     this.stream?.getTracks().forEach((t) => t.stop());
+    if (this.video) this.video.srcObject = null;
     this.video = null;
     this.stream = null;
   }

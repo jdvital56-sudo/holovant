@@ -79,3 +79,11 @@ export const useOrbitStore = create<OrbitState>((set, get) => ({
 export function setHovered(id: string | null) {
   useOrbitStore.setState({ hoveredId: id });
 }
+
+/** The module currently facing the viewer — what a gesture acts on. */
+export function getFrontModuleId(): string {
+  const { rotation } = useOrbitStore.getState();
+  const count = moduleRegistry.length;
+  const index = ((Math.round(-rotation / stepDeg) % count) + count) % count;
+  return moduleRegistry[index].id;
+}
