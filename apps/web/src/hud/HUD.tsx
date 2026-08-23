@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { useGestureStore } from "@/stores/gestureStore";
+import { useQualityStore } from "@/quality/qualityStore";
 import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
 import { CameraFeed } from "./CameraFeed";
 import { moduleRegistry } from "@/modules/registry";
@@ -41,6 +42,8 @@ export function HUD() {
   const currentGesture = useGestureStore((s) => s.currentGesture);
   const confidence = useGestureStore((s) => s.confidence);
   const errorMessage = useGestureStore((s) => s.errorMessage);
+  const fps = useQualityStore((s) => s.fps);
+  const tier = useQualityStore((s) => s.tier);
 
   return (
     <div className="fixed inset-0 z-10 pointer-events-none p-4 sm:p-8 grid grid-cols-2 grid-rows-[auto_1fr_auto] font-mono">
@@ -50,7 +53,8 @@ export function HUD() {
           SYSTEM ONLINE
         </div>
         <div className="text-[11px] text-mist mt-1">
-          60 <span className="text-frost">FPS</span> &nbsp;&middot;&nbsp; GPU <span className="text-frost">NOMINAL</span>
+          <span className={fps > 0 && fps < 45 ? "text-warn" : "text-frost"}>{fps > 0 ? fps : "--"}</span> FPS
+          &nbsp;&middot;&nbsp; QUALITY <span className="text-frost uppercase">{tier}</span>
         </div>
         <button
           type="button"

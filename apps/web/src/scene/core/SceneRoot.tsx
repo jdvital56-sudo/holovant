@@ -2,13 +2,14 @@
 
 import { useRef, useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
-import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { OrbitController } from "@/scene/orbit/OrbitController";
 import { useMouseKeyboardAdapter } from "@/gestures/adapters/useMouseKeyboardAdapter";
 import { isWebglSupported } from "@/lib/webgl";
 import { StaticFallbackScene } from "./StaticFallbackScene";
 import { ParticleField } from "./ParticleField";
 import { CameraRig } from "./CameraRig";
+import { QualityGovernor } from "@/quality/QualityGovernor";
+import { PostEffects } from "./PostEffects";
 
 export function SceneRoot() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -27,18 +28,17 @@ export function SceneRoot() {
   return (
     <div ref={containerRef} className="fixed inset-0 touch-none cursor-grab active:cursor-grabbing">
       {webglOk && (
-        <Canvas camera={{ position: [0, 0.6, 8.5], fov: 45 }} dpr={[1, 2]}>
+        <Canvas camera={{ position: [0, 0.6, 8.5], fov: 45 }}>
           <color attach="background" args={["#05070b"]} />
           <fog attach="fog" args={["#05070b", 6, 16]} />
           <ambientLight intensity={0.5} />
           <pointLight position={[0, 3, 4]} intensity={40} color="#6fb3ff" />
           <pointLight position={[-4, -2, -3]} intensity={15} color="#35547a" />
+          <QualityGovernor />
           <CameraRig />
           <ParticleField />
           <OrbitController />
-          <EffectComposer>
-            <Bloom luminanceThreshold={0.15} luminanceSmoothing={0.9} intensity={0.9} mipmapBlur />
-          </EffectComposer>
+          <PostEffects />
         </Canvas>
       )}
     </div>
