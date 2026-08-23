@@ -26,6 +26,14 @@ export interface ModuleDataProvider<TData> {
   subscribe?(onUpdate: (data: TData) => void): () => void;
 }
 
+/** One readout row in a module's expanded panel. */
+export interface ModuleMetric {
+  label: string;
+  value: string;
+  /** Signed change over the module's own reporting period, if it has one. */
+  deltaPct?: number;
+}
+
 export interface ModuleDefinition<TData = unknown> {
   id: ModuleId;
   label: string;
@@ -34,4 +42,10 @@ export interface ModuleDefinition<TData = unknown> {
   /** Accent hue driving card glow/border/HUD tinting for this module. */
   themeColor: string;
   dataProvider: ModuleDataProvider<TData>;
+  /**
+   * Projects a snapshot into the rows the expanded panel renders. Required so
+   * that adding a module is a type error until it has declared what it shows —
+   * a new module can never silently expand into an empty panel.
+   */
+  toMetrics(data: TData): ModuleMetric[];
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
+// Type-only import: erased at compile time, so it does not pull MediaPipe
+// into the bundle. The library itself is loaded on demand below.
+import type { HandLandmarker } from "@mediapipe/tasks-vision";
 
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
 const MODEL_URL =
@@ -8,14 +10,20 @@ const MODEL_URL =
 
 let landmarkerPromise: Promise<HandLandmarker> | null = null;
 
+/**
+ * Loads MediaPipe only when tracking is actually switched on. Users who never
+ * enable hand tracking — the default — never download the vision library.
+ */
 function getLandmarker() {
   if (!landmarkerPromise) {
-    landmarkerPromise = FilesetResolver.forVisionTasks(WASM_BASE).then((vision) =>
-      HandLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
-        runningMode: "VIDEO",
-        numHands: 1,
-      }),
+    landmarkerPromise = import("@mediapipe/tasks-vision").then(({ FilesetResolver, HandLandmarker }) =>
+      FilesetResolver.forVisionTasks(WASM_BASE).then((vision) =>
+        HandLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
+          runningMode: "VIDEO",
+          numHands: 1,
+        }),
+      ),
     );
   }
   return landmarkerPromise;

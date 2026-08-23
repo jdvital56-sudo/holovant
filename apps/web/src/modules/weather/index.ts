@@ -15,4 +15,8 @@ export const weatherModule: ModuleDefinition<WeatherSnapshot> = {
     condition: "clear",
     temperatureC: 21,
   }),
+  toMetrics: (d) => [
+    { label: "Temperature", value: `${d.temperatureC}°C` },
+    { label: "Condition", value: d.condition },
+  ],
 };

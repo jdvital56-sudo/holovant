@@ -19,6 +19,9 @@ export function HolographicCard({ module, x, z, rotationY, depthFactor }: Hologr
   const opacity = 0.32 + 0.68 * ((depthFactor + 1) / 2);
   const isSelected = state === "selected" || state === "expanded";
   const isHovered = state === "hovered";
+  /** Front-facing cards open on click; the rest first travel to the front, so
+   * clicking to steer the carousel never fires a panel the user didn't ask for. */
+  const isFrontmost = depthFactor > 0.85;
 
   return (
     <group position={[x, 0, z]} rotation={[0, rotationY, 0]}>
@@ -29,7 +32,9 @@ export function HolographicCard({ module, x, z, rotationY, depthFactor }: Hologr
         style={{ pointerEvents: "auto" }}
       >
         <div
-          onClick={() => dispatch({ type: "select", cardId: module.id, source: "mouse" })}
+          onClick={() =>
+            dispatch({ type: isFrontmost ? "expand" : "select", cardId: module.id, source: "mouse" })
+          }
           onPointerEnter={() => setHovered(module.id)}
           onPointerLeave={() => setHovered(null)}
           className={[

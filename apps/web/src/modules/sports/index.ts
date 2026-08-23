@@ -15,4 +15,8 @@ export const sportsModule: ModuleDefinition<SportsSnapshot> = {
     liveFixture: "Arsenal vs Man City",
     score: "1 - 1",
   }),
+  toMetrics: (d) => [
+    { label: "Live fixture", value: d.liveFixture },
+    { label: "Score", value: d.score },
+  ],
 };

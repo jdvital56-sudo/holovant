@@ -1,5 +1,6 @@
 import type { ModuleDefinition } from "@holovant/module-contracts";
 import { createMockProvider } from "@/lib/createMockProvider";
+import { compactNumber } from "@/lib/format";
 
 export interface LinkedinSnapshot {
   followers: number;
@@ -17,4 +18,9 @@ export const linkedinModule: ModuleDefinition<LinkedinSnapshot> = {
     weeklyGrowthPct: 2.2,
     postEngagementPct: 6.4,
   }),
+  toMetrics: (d) => [
+    { label: "Followers", value: compactNumber(d.followers), deltaPct: d.weeklyGrowthPct },
+    { label: "Post engagement", value: `${d.postEngagementPct.toFixed(1)}%` },
+    { label: "Weekly growth", value: `${d.weeklyGrowthPct.toFixed(1)}%` },
+  ],
 };

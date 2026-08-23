@@ -13,4 +13,8 @@ export const aiModule: ModuleDefinition<AiSnapshot> = {
   dataProvider: createMockProvider<AiSnapshot>({
     status: "idle",
   }),
+  toMetrics: (d) => [
+    { label: "Assistant status", value: d.status },
+    { label: "Voice", value: "not connected yet" },
+  ],
 };

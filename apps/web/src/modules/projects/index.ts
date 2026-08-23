@@ -15,4 +15,8 @@ export const projectsModule: ModuleDefinition<ProjectsSnapshot> = {
     activeCount: 5,
     latestProject: "Holovant",
   }),
+  toMetrics: (d) => [
+    { label: "Active projects", value: `${d.activeCount}` },
+    { label: "Latest", value: d.latestProject },
+  ],
 };

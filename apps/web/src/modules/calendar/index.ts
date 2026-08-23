@@ -15,4 +15,8 @@ export const calendarModule: ModuleDefinition<CalendarSnapshot> = {
     nextEvent: "Design review — 15:00",
     eventsToday: 4,
   }),
+  toMetrics: (d) => [
+    { label: "Next event", value: d.nextEvent },
+    { label: "Events today", value: `${d.eventsToday}` },
+  ],
 };

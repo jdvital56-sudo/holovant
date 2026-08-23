@@ -19,6 +19,19 @@ interface OrbitState {
 
 const stepDeg = 360 / moduleRegistry.length;
 
+/**
+ * Rotation that brings a card to the front, picked as the nearest equivalent
+ * angle to where the carousel already is — otherwise selecting a card just
+ * behind the front would spin almost all the way around to reach it.
+ */
+function rotationToCenter(cardId: string, currentRotation: number): number {
+  const index = moduleRegistry.findIndex((m) => m.id === cardId);
+  if (index === -1) return currentRotation;
+  const base = -index * stepDeg;
+  const turns = Math.round((currentRotation - base) / 360);
+  return base + turns * 360;
+}
+
 export const useOrbitStore = create<OrbitState>((set, get) => ({
   rotation: 0,
   hoveredId: null,
@@ -41,10 +54,18 @@ export const useOrbitStore = create<OrbitState>((set, get) => ({
         }));
         return;
       case "select":
-        set({ selectedId: event.cardId, expandedId: null });
+        set((s) => ({
+          selectedId: event.cardId,
+          expandedId: null,
+          rotation: rotationToCenter(event.cardId, s.rotation),
+        }));
         return;
       case "expand":
-        set({ expandedId: event.cardId, selectedId: event.cardId });
+        set((s) => ({
+          selectedId: event.cardId,
+          expandedId: event.cardId,
+          rotation: rotationToCenter(event.cardId, s.rotation),
+        }));
         return;
       case "collapse":
         set({ expandedId: null });

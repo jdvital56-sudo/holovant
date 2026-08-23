@@ -15,4 +15,8 @@ export const musicModule: ModuleDefinition<MusicSnapshot> = {
     nowPlaying: "—",
     isPlaying: false,
   }),
+  toMetrics: (d) => [
+    { label: "Now playing", value: d.nowPlaying },
+    { label: "State", value: d.isPlaying ? "playing" : "paused" },
+  ],
 };

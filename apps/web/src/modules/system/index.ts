@@ -17,4 +17,9 @@ export const systemModule: ModuleDefinition<SystemSnapshot> = {
     gpuPct: 34,
     memoryPct: 52,
   }),
+  toMetrics: (d) => [
+    { label: "CPU", value: `${d.cpuPct}%` },
+    { label: "GPU", value: `${d.gpuPct}%` },
+    { label: "Memory", value: `${d.memoryPct}%` },
+  ],
 };

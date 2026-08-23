@@ -15,4 +15,8 @@ export const newsModule: ModuleDefinition<NewsSnapshot> = {
     headline: "AI model releases accelerate again",
     unreadCount: 12,
   }),
+  toMetrics: (d) => [
+    { label: "Top headline", value: d.headline },
+    { label: "Unread", value: `${d.unreadCount}` },
+  ],
 };

@@ -1,1 +1,1 @@
-export type { ModuleId, ModuleDataProvider, ModuleDefinition } from "./types";
+export type { ModuleId, ModuleDataProvider, ModuleDefinition, ModuleMetric } from "./types";
