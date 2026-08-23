@@ -4,6 +4,7 @@ export type ModuleId =
   | "youtube"
   | "x"
   | "linkedin"
+  | "telegram"
   | "stocks"
   | "projects"
   | "sports"

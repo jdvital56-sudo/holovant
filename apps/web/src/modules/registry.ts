@@ -4,6 +4,7 @@ import { tiktokModule } from "./tiktok";
 import { youtubeModule } from "./youtube";
 import { xModule } from "./x";
 import { linkedinModule } from "./linkedin";
+import { telegramModule } from "./telegram";
 import { stocksModule } from "./stocks";
 import { projectsModule } from "./projects";
 import { sportsModule } from "./sports";
@@ -25,6 +26,7 @@ export const moduleRegistry: ModuleDefinition[] = [
   youtubeModule,
   xModule,
   linkedinModule,
+  telegramModule,
   stocksModule,
   projectsModule,
   sportsModule,
