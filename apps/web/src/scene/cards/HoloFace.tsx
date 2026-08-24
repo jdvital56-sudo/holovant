@@ -7,6 +7,7 @@ interface HoloFaceProps {
   module: ModuleDefinition;
   metrics: ModuleMetric[];
   accent: string;
+  accountCount: number;
 }
 
 /** Deterministic per module, so a card's waveform is its own and stays put. */
@@ -30,24 +31,33 @@ function gaugeValue(metric: ModuleMetric | undefined): number {
  * and the supporting readouts sit deliberately below legibility — present as
  * texture, the way instrument panels are in the reference.
  */
-export function HoloFace({ module, metrics, accent }: HoloFaceProps) {
+export function HoloFace({ module, metrics, accent, accountCount }: HoloFaceProps) {
   const primary = metrics[0];
   const secondary = metrics[1];
   const wave = waveform(module.id);
 
   return (
     <div className="flex h-full flex-col items-center justify-between">
-      <div className="flex w-full items-center justify-center gap-[5px] pt-1">
-        {Array.from({ length: 7 }, (_, i) => (
-          <span
-            key={i}
-            className="h-[5px] w-[5px] rounded-full"
-            style={{
-              background: i < 4 ? accent : "rgba(233,238,246,0.25)",
-              boxShadow: i < 4 ? `0 0 6px ${accent}` : "none",
-            }}
-          />
-        ))}
+      <div className="flex w-full items-center justify-between pt-1">
+        <div className="flex items-center gap-[5px]">
+          {Array.from({ length: 7 }, (_, i) => (
+            <span
+              key={i}
+              className="h-[5px] w-[5px] rounded-full"
+              style={{
+                background: i < 4 ? accent : "rgba(233,238,246,0.25)",
+                boxShadow: i < 4 ? `0 0 6px ${accent}` : "none",
+              }}
+            />
+          ))}
+        </div>
+        {/* The figure on a multi-account card is a combined one, and saying so
+            on the face avoids it being read as a single profile's number. */}
+        {accountCount > 1 && (
+          <span className="font-mono text-[11px] tracking-[0.12em]" style={{ color: accent }}>
+            ×{accountCount}
+          </span>
+        )}
       </div>
 
       <HoloGauge value={gaugeValue(primary)} accent={accent}>

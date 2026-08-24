@@ -7,6 +7,8 @@ interface FaceProps {
   module: ModuleDefinition;
   metrics: ModuleMetric[];
   accent: string;
+  /** How many accounts the figures cover; only some treatments show it. */
+  accountCount: number;
 }
 
 function code(label: string) {

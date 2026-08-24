@@ -1,5 +1,10 @@
-import type { ModuleDefinition } from "@holovant/module-contracts";
-import { createMockProvider } from "@/lib/createMockProvider";
+import type { ModuleAccount, ModuleDefinition } from "@holovant/module-contracts";
+import {
+  createMultiAccountProvider,
+  sumBy,
+  maxBy,
+  weightedAverage,
+} from "@/lib/createMultiAccountProvider";
 import { compactNumber } from "@/lib/format";
 
 export interface XSnapshot {
@@ -8,15 +13,25 @@ export interface XSnapshot {
   topPostImpressions: number;
 }
 
+const accounts: ModuleAccount<XSnapshot>[] = [
+  { id: "main", label: "@holovant", data: { followers: 12800, weeklyGrowthPct: 0.9, topPostImpressions: 58900 } },
+  { id: "build", label: "@buildinpublic", data: { followers: 4600, weeklyGrowthPct: 3.7, topPostImpressions: 92000 } },
+];
+
 export const xModule: ModuleDefinition<XSnapshot> = {
   id: "x",
   label: "X",
   tagline: "Followers & impressions",
   themeColor: "#6e79f8",
-  dataProvider: createMockProvider<XSnapshot>({
-    followers: 12800,
-    weeklyGrowthPct: 0.9,
-    topPostImpressions: 58900,
+  dataProvider: createMultiAccountProvider<XSnapshot>({
+    accounts,
+    aggregate: (all) => ({
+      // Audience adds up; a growth rate is weighted by audience so a
+      // small fast-growing account cannot flatter the whole picture.
+      followers: sumBy(all, (d) => d.followers),
+      weeklyGrowthPct: weightedAverage(all, (d) => d.weeklyGrowthPct, (d) => d.followers),
+      topPostImpressions: maxBy(all, (d) => d.topPostImpressions),
+    }),
   }),
   toMetrics: (d) => [
     { label: "Followers", value: compactNumber(d.followers), deltaPct: d.weeklyGrowthPct },

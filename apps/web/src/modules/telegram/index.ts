@@ -1,5 +1,10 @@
-import type { ModuleDefinition } from "@holovant/module-contracts";
-import { createMockProvider } from "@/lib/createMockProvider";
+import type { ModuleAccount, ModuleDefinition } from "@holovant/module-contracts";
+import {
+  createMultiAccountProvider,
+  sumBy,
+  maxBy,
+  weightedAverage,
+} from "@/lib/createMultiAccountProvider";
 import { compactNumber } from "@/lib/format";
 
 export interface TelegramSnapshot {
@@ -8,15 +13,25 @@ export interface TelegramSnapshot {
   postViews: number;
 }
 
+const accounts: ModuleAccount<TelegramSnapshot>[] = [
+  { id: "main", label: "Holovant", data: { subscribers: 8100, weeklyGrowthPct: 3.5, postViews: 15200 } },
+  { id: "dev", label: "Holovant Dev", data: { subscribers: 1900, weeklyGrowthPct: 7.1, postViews: 5400 } },
+];
+
 export const telegramModule: ModuleDefinition<TelegramSnapshot> = {
   id: "telegram",
   label: "Telegram",
   tagline: "Channel growth",
   themeColor: "#668df3",
-  dataProvider: createMockProvider<TelegramSnapshot>({
-    subscribers: 8100,
-    weeklyGrowthPct: 3.5,
-    postViews: 15200,
+  dataProvider: createMultiAccountProvider<TelegramSnapshot>({
+    accounts,
+    aggregate: (all) => ({
+      // Audience adds up; a growth rate is weighted by audience so a
+      // small fast-growing account cannot flatter the whole picture.
+      subscribers: sumBy(all, (d) => d.subscribers),
+      weeklyGrowthPct: weightedAverage(all, (d) => d.weeklyGrowthPct, (d) => d.subscribers),
+      postViews: maxBy(all, (d) => d.postViews),
+    }),
   }),
   toMetrics: (d) => [
     { label: "Subscribers", value: compactNumber(d.subscribers), deltaPct: d.weeklyGrowthPct },

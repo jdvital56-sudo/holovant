@@ -1,5 +1,10 @@
-import type { ModuleDefinition } from "@holovant/module-contracts";
-import { createMockProvider } from "@/lib/createMockProvider";
+import type { ModuleAccount, ModuleDefinition } from "@holovant/module-contracts";
+import {
+  createMultiAccountProvider,
+  sumBy,
+  maxBy,
+  weightedAverage,
+} from "@/lib/createMultiAccountProvider";
 import { compactNumber } from "@/lib/format";
 
 export interface YoutubeSnapshot {
@@ -8,15 +13,25 @@ export interface YoutubeSnapshot {
   latestVideoViews: number;
 }
 
+const accounts: ModuleAccount<YoutubeSnapshot>[] = [
+  { id: "main", label: "Holovant", data: { subscribers: 34200, weeklyGrowthPct: 1.8, latestVideoViews: 45300 } },
+  { id: "shorts", label: "Holovant Shorts", data: { subscribers: 18900, weeklyGrowthPct: 6.4, latestVideoViews: 210000 } },
+];
+
 export const youtubeModule: ModuleDefinition<YoutubeSnapshot> = {
   id: "youtube",
   label: "YouTube",
   tagline: "Subscribers & views",
   themeColor: "#7372fb",
-  dataProvider: createMockProvider<YoutubeSnapshot>({
-    subscribers: 34200,
-    weeklyGrowthPct: 1.8,
-    latestVideoViews: 45300,
+  dataProvider: createMultiAccountProvider<YoutubeSnapshot>({
+    accounts,
+    aggregate: (all) => ({
+      // Audience adds up; a growth rate is weighted by audience so a
+      // small fast-growing account cannot flatter the whole picture.
+      subscribers: sumBy(all, (d) => d.subscribers),
+      weeklyGrowthPct: weightedAverage(all, (d) => d.weeklyGrowthPct, (d) => d.subscribers),
+      latestVideoViews: maxBy(all, (d) => d.latestVideoViews),
+    }),
   }),
   toMetrics: (d) => [
     { label: "Subscribers", value: compactNumber(d.subscribers), deltaPct: d.weeklyGrowthPct },

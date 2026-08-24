@@ -1,5 +1,6 @@
 export type {
   AdviceLang,
+  ModuleAccount,
   ModuleAdvice,
   ModuleId,
   ModuleDataProvider,

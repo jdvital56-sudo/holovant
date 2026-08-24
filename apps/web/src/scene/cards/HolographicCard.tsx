@@ -3,7 +3,7 @@
 import { Html } from "@react-three/drei";
 import { useOrbitStore, setHovered } from "@/stores/orbitStore";
 import { useCardStyleStore } from "@/stores/cardStyleStore";
-import { useModuleMetrics } from "@/modules/moduleDataStore";
+import { useModuleMetrics, useModuleAccountCount } from "@/modules/moduleDataStore";
 import type { ModuleDefinition } from "@holovant/module-contracts";
 import { InstrumentFace, GlyphFace, ReadoutFace } from "./CardFaces";
 import { HoloFace } from "./HoloFace";
@@ -27,6 +27,7 @@ export function HolographicCard({ module, x, z, rotationY, depthFactor }: Hologr
   const dispatch = useOrbitStore((s) => s.dispatch);
   const style = useCardStyleStore((s) => s.style);
   const metrics = useModuleMetrics(module.id);
+  const accountCount = useModuleAccountCount(module.id);
 
   const isSelected = state === "selected" || state === "expanded";
   const isHovered = state === "hovered";
@@ -107,7 +108,7 @@ export function HolographicCard({ module, x, z, rotationY, depthFactor }: Hologr
               <span className="absolute -bottom-2 -right-2 h-4 w-4 border-b-2 border-r-2" style={{ borderColor: accent }} />
             </>
           )}
-          <Face module={module} metrics={metrics} accent={accent} />
+          <Face module={module} metrics={metrics} accent={accent} accountCount={accountCount} />
         </div>
       </Html>
     </group>

@@ -2,14 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { AdviceLang, ModuleDefinition, ModuleMetric } from "@holovant/module-contracts";
+import type {
+  AdviceLang,
+  ModuleAccount,
+  ModuleDefinition,
+  ModuleMetric,
+} from "@holovant/module-contracts";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { moduleRegistry } from "@/modules/registry";
 import { briefingFor } from "@/modules/briefing";
+import { selectAccount, useSelectedAccount } from "@/modules/accountStore";
 
-function useModuleContent(activeModule: ModuleDefinition | undefined) {
+function useModuleContent(activeModule: ModuleDefinition | undefined, accountId: string | null) {
   const [metrics, setMetrics] = useState<ModuleMetric[]>([]);
   const [tips, setTips] = useState<string[]>([]);
+  const [accounts, setAccounts] = useState<ModuleAccount[]>([]);
 
   useEffect(() => {
     if (!activeModule) return;
@@ -17,9 +24,23 @@ function useModuleContent(activeModule: ModuleDefinition | undefined) {
     const lang: AdviceLang =
       typeof navigator !== "undefined" && navigator.language?.startsWith("ru") ? "ru" : "en";
 
+    const provider = activeModule.dataProvider;
+
+    void Promise.resolve(provider.listAccounts?.() ?? []).then((list) => {
+      if (active) setAccounts(list);
+    });
+
+    // An account is chosen only if it still exists; a stale id from a
+    // disconnected account must not blank the panel.
+    const dataFor = async () => {
+      if (!accountId || !provider.listAccounts) return provider.getSnapshot();
+      const list = await provider.listAccounts();
+      return list.find((a) => a.id === accountId)?.data ?? provider.getSnapshot();
+    };
+
     // getSnapshot may be sync (mock) or async (live, Phase 3) — Promise.resolve
     // normalizes both so swapping in a real provider needs no change here.
-    Promise.resolve(activeModule.dataProvider.getSnapshot()).then((data) => {
+    void Promise.resolve(dataFor()).then((data) => {
       if (!active) return;
       setMetrics(activeModule.toMetrics(data));
       setTips(activeModule.toAdvice(data, lang).tips);
@@ -36,18 +57,46 @@ function useModuleContent(activeModule: ModuleDefinition | undefined) {
     return () => {
       active = false;
     };
-  }, [activeModule]);
+  }, [activeModule, accountId]);
 
   // Stale content from a previously opened module is never shown: the panel
   // only renders while activeModule is set, and each open refreshes it.
-  return activeModule ? { metrics, tips } : { metrics: [], tips: [] };
+  return activeModule ? { metrics, tips, accounts } : { metrics: [], tips: [], accounts: [] };
+}
+
+function AccountChip({
+  label,
+  active,
+  accent,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  accent: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="cursor-pointer rounded-full border px-3 py-1 font-mono text-[11px] transition-colors"
+      style={{
+        borderColor: active ? accent : "rgba(143,178,222,0.22)",
+        color: active ? accent : "var(--mist)",
+        background: active ? `${accent}1a` : "transparent",
+      }}
+    >
+      {label}
+    </button>
+  );
 }
 
 export function ModulePanel() {
   const expandedId = useOrbitStore((s) => s.expandedId);
   const dispatch = useOrbitStore((s) => s.dispatch);
   const activeModule = moduleRegistry.find((m) => m.id === expandedId);
-  const { metrics, tips } = useModuleContent(activeModule);
+  const selectedAccountId = useSelectedAccount(activeModule?.id ?? "instagram");
+  const { metrics, tips, accounts } = useModuleContent(activeModule, selectedAccountId);
 
   useEffect(() => {
     if (!expandedId) return;
@@ -90,6 +139,34 @@ export function ModulePanel() {
               ESC
             </button>
           </div>
+
+          {accounts.length > 1 && (
+            <div className="mt-5">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-mist">
+                {accounts.length} accounts
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {/* Combined first and selected by default: with several profiles
+                    connected, the overall position is the question worth
+                    answering before any single one. */}
+                <AccountChip
+                  label="All"
+                  active={selectedAccountId === null}
+                  accent={activeModule.themeColor}
+                  onClick={() => selectAccount(activeModule.id, null)}
+                />
+                {accounts.map((account) => (
+                  <AccountChip
+                    key={account.id}
+                    label={account.label}
+                    active={selectedAccountId === account.id}
+                    accent={activeModule.themeColor}
+                    onClick={() => selectAccount(activeModule.id, account.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 space-y-3">
             {metrics.map((metric) => (

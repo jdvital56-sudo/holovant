@@ -1,5 +1,10 @@
-import type { ModuleDefinition } from "@holovant/module-contracts";
-import { createMockProvider } from "@/lib/createMockProvider";
+import type { ModuleAccount, ModuleDefinition } from "@holovant/module-contracts";
+import {
+  createMultiAccountProvider,
+  sumBy,
+  maxBy,
+  weightedAverage,
+} from "@/lib/createMultiAccountProvider";
 import { compactNumber } from "@/lib/format";
 
 export interface TiktokSnapshot {
@@ -8,15 +13,26 @@ export interface TiktokSnapshot {
   topVideoViews: number;
 }
 
+const accounts: ModuleAccount<TiktokSnapshot>[] = [
+  { id: "main", label: "@holovant", data: { followers: 96500, weeklyGrowthPct: 4.1, topVideoViews: 812000 } },
+  { id: "clips", label: "@holovant.clips", data: { followers: 41200, weeklyGrowthPct: 9.3, topVideoViews: 1240000 } },
+  { id: "ru", label: "@holovant.ru", data: { followers: 8700, weeklyGrowthPct: 1.2, topVideoViews: 52000 } },
+];
+
 export const tiktokModule: ModuleDefinition<TiktokSnapshot> = {
   id: "tiktok",
   label: "TikTok",
   tagline: "Views & engagement",
   themeColor: "#8476fd",
-  dataProvider: createMockProvider<TiktokSnapshot>({
-    followers: 96500,
-    weeklyGrowthPct: 4.1,
-    topVideoViews: 812000,
+  dataProvider: createMultiAccountProvider<TiktokSnapshot>({
+    accounts,
+    aggregate: (all) => ({
+      // Audience adds up; a growth rate is weighted by audience so a
+      // small fast-growing account cannot flatter the whole picture.
+      followers: sumBy(all, (d) => d.followers),
+      weeklyGrowthPct: weightedAverage(all, (d) => d.weeklyGrowthPct, (d) => d.followers),
+      topVideoViews: maxBy(all, (d) => d.topVideoViews),
+    }),
   }),
   toMetrics: (d) => [
     { label: "Followers", value: compactNumber(d.followers), deltaPct: d.weeklyGrowthPct },

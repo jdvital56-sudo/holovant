@@ -20,8 +20,31 @@ export type ModuleId =
  * implementations only; Phase 3 swaps in live providers behind this same
  * interface without touching orbit/card rendering code.
  */
+/**
+ * One connected account inside a module. Someone running ten Instagram
+ * profiles has ten of these under a single Instagram module, rather than ten
+ * modules cluttering the ring.
+ */
+export interface ModuleAccount<TData = unknown> {
+  /** Stable across reloads; used to remember which account was selected. */
+  id: string;
+  /** What the user calls it — a handle or channel name. */
+  label: string;
+  data: TData;
+}
+
 export interface ModuleDataProvider<TData> {
+  /**
+   * The module's headline figures. Where several accounts are connected this
+   * is their combined position, since "how am I doing overall" is the question
+   * a wall of separate cards fails to answer.
+   */
   getSnapshot(): Promise<TData> | TData;
+  /**
+   * Present only on modules that can hold more than one account. Weather and
+   * system diagnostics have nothing to list, and should not have to pretend.
+   */
+  listAccounts?(): Promise<ModuleAccount<TData>[]> | ModuleAccount<TData>[];
   /** Optional push channel for live data; unused by mock providers. */
   subscribe?(onUpdate: (data: TData) => void): () => void;
 }

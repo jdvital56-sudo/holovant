@@ -1,5 +1,9 @@
-import type { ModuleDefinition } from "@holovant/module-contracts";
-import { createMockProvider } from "@/lib/createMockProvider";
+import type { ModuleAccount, ModuleDefinition } from "@holovant/module-contracts";
+import {
+  createMultiAccountProvider,
+  sumBy,
+  weightedAverage,
+} from "@/lib/createMultiAccountProvider";
 import { compactNumber } from "@/lib/format";
 
 export interface LinkedinSnapshot {
@@ -8,15 +12,25 @@ export interface LinkedinSnapshot {
   postEngagementPct: number;
 }
 
+const accounts: ModuleAccount<LinkedinSnapshot>[] = [
+  { id: "personal", label: "Vadym", data: { followers: 5400, weeklyGrowthPct: 2.2, postEngagementPct: 6.4 } },
+  { id: "company", label: "Holovant", data: { followers: 2100, weeklyGrowthPct: 4.8, postEngagementPct: 3.1 } },
+];
+
 export const linkedinModule: ModuleDefinition<LinkedinSnapshot> = {
   id: "linkedin",
   label: "LinkedIn",
   tagline: "Network growth",
   themeColor: "#6a83f5",
-  dataProvider: createMockProvider<LinkedinSnapshot>({
-    followers: 5400,
-    weeklyGrowthPct: 2.2,
-    postEngagementPct: 6.4,
+  dataProvider: createMultiAccountProvider<LinkedinSnapshot>({
+    accounts,
+    aggregate: (all) => ({
+      // Audience adds up; a growth rate is weighted by audience so a
+      // small fast-growing account cannot flatter the whole picture.
+      followers: sumBy(all, (d) => d.followers),
+      weeklyGrowthPct: weightedAverage(all, (d) => d.weeklyGrowthPct, (d) => d.followers),
+      postEngagementPct: weightedAverage(all, (d) => d.postEngagementPct, (d) => d.followers),
+    }),
   }),
   toMetrics: (d) => [
     { label: "Followers", value: compactNumber(d.followers), deltaPct: d.weeklyGrowthPct },
