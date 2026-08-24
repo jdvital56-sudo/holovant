@@ -8,8 +8,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full">
-      <body className="min-h-full overflow-hidden">{children}</body>
+    // Browser translators and extensions rewrite attributes on these two tags
+    // before React hydrates — Chrome's translator swaps `lang` and adds its own
+    // class — which otherwise trips a hydration mismatch on a page we rendered
+    // correctly. Suppression applies only to these elements' own attributes.
+    <html lang="en" className="h-full" suppressHydrationWarning>
+      <body className="min-h-full overflow-hidden" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

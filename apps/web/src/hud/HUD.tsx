@@ -46,7 +46,13 @@ export function HUD() {
   const tier = useQualityStore((s) => s.tier);
 
   return (
-    <div className="fixed inset-0 z-10 pointer-events-none p-4 sm:p-8 grid grid-cols-2 grid-rows-[auto_1fr_auto] font-mono">
+    // translate="no" keeps browser translators from replacing these text
+    // nodes: the clock and frame counter rewrite themselves several times a
+    // second, and React can hard-crash removing a node a translator swapped.
+    <div
+      translate="no"
+      className="fixed inset-0 z-10 pointer-events-none p-4 sm:p-8 grid grid-cols-2 grid-rows-[auto_1fr_auto] font-mono"
+    >
       <div className="pointer-events-auto col-start-1 row-start-1 justify-self-start">
         <div className="flex items-center gap-2 text-xs text-frost">
           <span className="w-1.5 h-1.5 rounded-full bg-signal shadow-[0_0_8px_rgba(111,179,255,0.6)] animate-pulse" />
