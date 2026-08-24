@@ -9,6 +9,7 @@ import { useInteractionSounds } from "@/audio/useInteractionSounds";
 import { useVoiceCommands } from "@/voice/useVoiceCommands";
 import { useVoiceStore } from "@/voice/voiceStore";
 import { useCardStyleStore, cycleCardStyle, CARD_STYLE_LABEL } from "@/stores/cardStyleStore";
+import { warmUpServerVoice } from "@/voice/speech";
 import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
 import { CameraFeed } from "./CameraFeed";
 import { moduleRegistry } from "@/modules/registry";
@@ -63,6 +64,12 @@ export function HUD() {
   const voiceError = useVoiceStore((s) => s.errorMessage);
   const cardStyle = useCardStyleStore((s) => s.style);
   useInteractionSounds();
+
+  // Load the server's voice model while the user is still looking at the
+  // scene, so the first spoken reply is not the one that waits for it.
+  useEffect(() => {
+    warmUpServerVoice();
+  }, []);
 
   return (
     // translate="no" keeps browser translators from replacing these text

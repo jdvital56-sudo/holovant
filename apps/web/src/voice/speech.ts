@@ -28,6 +28,27 @@ export function primeVoices() {
   window.speechSynthesis.onvoiceschanged = () => getVoices();
 }
 
+/** Set false once the server has said it cannot synthesise, so we stop asking. */
+let serverVoiceAvailable = true;
+let warmRequested = false;
+
+/**
+ * Asks the server to load its voice model now. Doing it on page load means the
+ * several seconds it takes are spent while the user is still looking at the
+ * scene, instead of landing on the first thing they say.
+ */
+export function warmUpServerVoice() {
+  if (warmRequested || typeof window === "undefined") return;
+  warmRequested = true;
+  void fetch("/api/speak", { method: "GET" })
+    .then((response) => {
+      if (response.status === 501) serverVoiceAvailable = false;
+    })
+    .catch(() => {
+      // Warming is best-effort; speaking will retry and fall back on its own.
+    });
+}
+
 /**
  * The API exposes no gender field, so male voices are identified by name.
  * These are the ones actually shipped on Windows and Chrome; anything not
@@ -78,13 +99,89 @@ function markDone() {
   }, ECHO_TAIL_MS);
 }
 
+let currentAudio: HTMLAudioElement | null = null;
+/** Rising id, so a slow reply cannot start playing after a newer one has. */
+let speechSequence = 0;
+
+function stopServerVoice() {
+  if (!currentAudio) return;
+  currentAudio.onended = null;
+  currentAudio.onerror = null;
+  currentAudio.pause();
+  URL.revokeObjectURL(currentAudio.src);
+  currentAudio = null;
+}
+
+/**
+ * Speaks through the server's own voice, which sounds the same for every user
+ * regardless of what their browser or operating system happens to ship.
+ * Returns false when the server cannot do it, so the caller can fall back.
+ */
+async function speakOnServer(text: string, sequence: number): Promise<boolean> {
+  if (!serverVoiceAvailable) return false;
+  try {
+    const response = await fetch("/api/speak", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+
+    if (response.status === 501) {
+      // Not configured — a permanent answer, so stop asking every time.
+      serverVoiceAvailable = false;
+      return false;
+    }
+    if (!response.ok) return false;
+
+    // A newer line was requested while this one was being synthesised.
+    if (sequence !== speechSequence) return true;
+
+    const blob = await response.blob();
+    if (sequence !== speechSequence) return true;
+
+    stopServerVoice();
+    const audio = new Audio(URL.createObjectURL(blob));
+    audio.volume = 0.95;
+    currentAudio = audio;
+    speaking = true;
+    audio.onended = markDone;
+    audio.onerror = markDone;
+    await audio.play();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Speaks a line, cutting off whatever was being said. Replies are short status
  * confirmations, so a queued backlog would leave the system narrating actions
  * the user took several seconds ago.
+ *
+ * The server voice is tried first and the browser's own is the fallback, so
+ * the product still talks on a deployment with no speech service behind it.
  */
 export function speak(text: string, lang: SpeechLang = "ru") {
-  if (!isSpeechSynthesisAvailable() || !text) return;
+  if (!text) return;
+  const sequence = ++speechSequence;
+
+  stopServerVoice();
+  if (isSpeechSynthesisAvailable()) window.speechSynthesis.cancel();
+  // Held from the moment the line is requested, not from when audio starts, so
+  // the microphone cannot pick up the reply during synthesis either.
+  speaking = true;
+
+  void speakOnServer(text, sequence).then((spoken) => {
+    if (spoken || sequence !== speechSequence) return;
+    speakInBrowser(text, lang);
+  });
+}
+
+function speakInBrowser(text: string, lang: SpeechLang) {
+  if (!isSpeechSynthesisAvailable()) {
+    markDone();
+    return;
+  }
   const synth = window.speechSynthesis;
   synth.cancel();
 
@@ -109,7 +206,12 @@ export function speak(text: string, lang: SpeechLang = "ru") {
 }
 
 export function stopSpeaking() {
-  if (!isSpeechSynthesisAvailable()) return;
+  speechSequence++;
+  stopServerVoice();
+  if (!isSpeechSynthesisAvailable()) {
+    speaking = false;
+    return;
+  }
   window.speechSynthesis.cancel();
   speaking = false;
   if (settleTimer) clearTimeout(settleTimer);
