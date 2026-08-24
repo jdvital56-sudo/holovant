@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useOrbitStore, getFrontModuleId } from "@/stores/orbitStore";
-import { useGestureStore, setTrackingStatus, setGestureReading, setTrackingError } from "@/stores/gestureStore";
+import {
+  useGestureStore,
+  setTrackingStatus,
+  setGestureReading,
+  setTrackingError,
+  setLocked,
+} from "@/stores/gestureStore";
 import { HandTrackingEngine, describeTrackingError, type HandPoint } from "@/gestures/engine/handTracking";
 import { pinchDistance, PINCH_THRESHOLD } from "@/gestures/classifiers/pinch";
 
@@ -35,6 +41,9 @@ export function useHandTrackingAdapter() {
     if (!hand) {
       lastX.current = null;
       wasPinching.current = false;
+      // A hand leaving frame while pinched must release the lock, or the scene
+      // stays frozen with no gesture left that can free it.
+      setLocked(false);
       if (now - lastReadoutAt.current > READOUT_INTERVAL_MS) {
         lastReadoutAt.current = now;
         setGestureReading("no hand", 0);
@@ -47,19 +56,34 @@ export function useHandTrackingAdapter() {
     const pinching = dist < PINCH_THRESHOLD;
 
     if (pinching && !wasPinching.current) {
-      // Toggle, so a pinch is always an escape route as well as a way in —
-      // never a gesture that can only get the user deeper into a panel.
+      // A pinch means "this one". It locks the carousel onto the card in front
+      // — snapping it to dead centre rather than leaving it stopped between two
+      // — and then opens it. Toggling on a second pinch keeps the gesture an
+      // escape route as well as a way in.
       const store = useOrbitStore.getState();
       if (store.expandedId) {
         store.dispatch({ type: "collapse", source: "gesture", confidence: 0.9 });
-        setGestureReading("pinch — close", 0.9);
+        setGestureReading("pinch — release", 0.9);
       } else {
         store.dispatch({ type: "expand", cardId: getFrontModuleId(), source: "gesture", confidence: 0.9 });
-        setGestureReading("pinch — open", 0.9);
+        setGestureReading("pinch — locked", 0.95);
       }
       lastReadoutAt.current = now;
     }
     wasPinching.current = pinching;
+    if (!pinching) setLocked(false);
+
+    // While the pinch is held the carousel is frozen: hand movement is ignored
+    // entirely, so holding a card still does not require holding the hand still.
+    if (pinching) {
+      setLocked(true);
+      lastX.current = wristX;
+      if (now - lastReadoutAt.current > READOUT_INTERVAL_MS) {
+        lastReadoutAt.current = now;
+        setGestureReading("locked", 1);
+      }
+      return;
+    }
 
     if (lastX.current !== null) {
       const dx = wristX - lastX.current;
@@ -67,12 +91,12 @@ export function useHandTrackingAdapter() {
         // Negated: the camera sees the user mirrored, so a hand moving to the
         // user's right travels toward lower x in the image.
         useOrbitStore.setState((s) => ({ rotation: s.rotation - dx * ROTATION_SENSITIVITY }));
-        if (!pinching && now - lastReadoutAt.current > READOUT_INTERVAL_MS) {
+        if (now - lastReadoutAt.current > READOUT_INTERVAL_MS) {
           lastReadoutAt.current = now;
           const speed = Math.min(1, Math.abs(dx) / 0.03);
           setGestureReading(dx < 0 ? "hand → right" : "hand → left", speed);
         }
-      } else if (!pinching && now - lastReadoutAt.current > READOUT_INTERVAL_MS) {
+      } else if (now - lastReadoutAt.current > READOUT_INTERVAL_MS) {
         lastReadoutAt.current = now;
         setGestureReading("hand steady", 0.35);
       }
@@ -99,6 +123,7 @@ export function useHandTrackingAdapter() {
   const disable = useCallback(() => {
     engineRef.current?.stop();
     engineRef.current = null;
+    setLocked(false);
     setTrackingStatus("off");
     setGestureReading(null, 0);
   }, []);

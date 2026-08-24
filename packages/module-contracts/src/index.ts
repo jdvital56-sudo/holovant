@@ -1,1 +1,8 @@
-export type { ModuleId, ModuleDataProvider, ModuleDefinition, ModuleMetric } from "./types";
+export type {
+  AdviceLang,
+  ModuleAdvice,
+  ModuleId,
+  ModuleDataProvider,
+  ModuleDefinition,
+  ModuleMetric,
+} from "./types";

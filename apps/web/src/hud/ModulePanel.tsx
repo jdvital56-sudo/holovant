@@ -2,36 +2,52 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { ModuleDefinition, ModuleMetric } from "@holovant/module-contracts";
+import type { AdviceLang, ModuleDefinition, ModuleMetric } from "@holovant/module-contracts";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { moduleRegistry } from "@/modules/registry";
+import { briefingFor } from "@/modules/briefing";
 
-function useModuleMetrics(activeModule: ModuleDefinition | undefined) {
+function useModuleContent(activeModule: ModuleDefinition | undefined) {
   const [metrics, setMetrics] = useState<ModuleMetric[]>([]);
+  const [tips, setTips] = useState<string[]>([]);
 
   useEffect(() => {
     if (!activeModule) return;
     let active = true;
+    const lang: AdviceLang =
+      typeof navigator !== "undefined" && navigator.language?.startsWith("ru") ? "ru" : "en";
+
     // getSnapshot may be sync (mock) or async (live, Phase 3) — Promise.resolve
     // normalizes both so swapping in a real provider needs no change here.
     Promise.resolve(activeModule.dataProvider.getSnapshot()).then((data) => {
-      if (active) setMetrics(activeModule.toMetrics(data));
+      if (!active) return;
+      setMetrics(activeModule.toMetrics(data));
+      setTips(activeModule.toAdvice(data, lang).tips);
     });
+
+    // Weather is the one module whose mock reading would be actively wrong, so
+    // it is replaced with a live one as soon as that arrives.
+    if (activeModule.id === "weather") {
+      void briefingFor(activeModule, lang).then((advice) => {
+        if (active) setTips(advice.tips);
+      });
+    }
+
     return () => {
       active = false;
     };
   }, [activeModule]);
 
-  // Stale metrics from a previously opened module are never shown: the panel
-  // only renders while activeModule is set, and each open refreshes them.
-  return activeModule ? metrics : [];
+  // Stale content from a previously opened module is never shown: the panel
+  // only renders while activeModule is set, and each open refreshes it.
+  return activeModule ? { metrics, tips } : { metrics: [], tips: [] };
 }
 
 export function ModulePanel() {
   const expandedId = useOrbitStore((s) => s.expandedId);
   const dispatch = useOrbitStore((s) => s.dispatch);
   const activeModule = moduleRegistry.find((m) => m.id === expandedId);
-  const metrics = useModuleMetrics(activeModule);
+  const { metrics, tips } = useModuleContent(activeModule);
 
   useEffect(() => {
     if (!expandedId) return;
@@ -97,9 +113,30 @@ export function ModulePanel() {
             ))}
           </div>
 
-          <p className="mt-6 font-mono text-[10px] leading-relaxed text-mist/70">
-            Sample data — live {activeModule.label} connection arrives with the integrations phase.
-          </p>
+          {tips.length > 0 && (
+            <div className="mt-6">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-mist">
+                What to do about it
+              </div>
+              <ul className="space-y-2">
+                {tips.map((tip) => (
+                  <li key={tip} className="flex gap-2 text-[13px] leading-snug text-frost/90">
+                    <span
+                      className="mt-[7px] h-1 w-1 shrink-0 rounded-full"
+                      style={{ background: activeModule.themeColor }}
+                    />
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {activeModule.id !== "weather" && (
+            <p className="mt-5 font-mono text-[10px] leading-relaxed text-mist/70">
+              Sample data — live {activeModule.label} connection arrives with the integrations phase.
+            </p>
+          )}
         </motion.div>
       )}
     </AnimatePresence>

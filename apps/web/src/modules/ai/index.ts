@@ -17,4 +17,19 @@ export const aiModule: ModuleDefinition<AiSnapshot> = {
     { label: "Assistant status", value: d.status },
     { label: "Voice", value: "not connected yet" },
   ],
+  toAdvice: (d, lang) => {
+    const tips =
+      lang === "ru"
+        ? [
+            "Скажите «найди …» — ищу в интернете голосом",
+            "«открой …» открывает любой модуль, «влево»/«вправо» крутят карусель",
+            `Состояние: ${d.status}`,
+          ]
+        : [
+            "Say “search for …” and I will search the web",
+            "“open …” opens any module, “left”/“right” turn the carousel",
+            `Status: ${d.status}`,
+          ];
+    return { spoken: tips[0], tips };
+  },
 };

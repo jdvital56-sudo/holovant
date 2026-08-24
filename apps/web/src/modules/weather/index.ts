@@ -19,4 +19,23 @@ export const weatherModule: ModuleDefinition<WeatherSnapshot> = {
     { label: "Temperature", value: `${d.temperatureC}°C` },
     { label: "Condition", value: d.condition },
   ],
+  toAdvice: (d, lang) => {
+    const cold = d.temperatureC <= 8;
+    const wet = d.condition === "rain";
+    const skyRu =
+      d.condition === "clear" ? "ясно" : d.condition === "rain" ? "дождь" : d.condition === "fog" ? "туман" : "облачно";
+    const tips =
+      lang === "ru"
+        ? [
+            `${d.temperatureC}°, ${skyRu}`,
+            cold ? "Холодно — куртка обязательна" : "Тепло, можно налегке",
+            wet ? "Возьмите зонт" : "Осадков не ожидается",
+          ]
+        : [
+            `${d.temperatureC}°, ${d.condition}`,
+            cold ? "Cold — take a coat" : "Mild, travel light",
+            wet ? "Take an umbrella" : "No precipitation expected",
+          ];
+    return { spoken: `${tips[0]}. ${tips[1]}`, tips };
+  },
 };

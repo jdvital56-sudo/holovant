@@ -7,6 +7,7 @@ import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes"
 import { matchIntent, replyFor } from "./commandEngine";
 import { speak, stopSpeaking, primeVoices, isSystemSpeaking, type SpeechLang } from "./speech";
 import { runSearch, clearSearch } from "./searchStore";
+import { briefingFor, findModule } from "@/modules/briefing";
 import {
   useVoiceStore,
   setVoiceStatus,
@@ -52,9 +53,12 @@ export function useVoiceCommands() {
 
     const store = useOrbitStore.getState();
     switch (intent.kind) {
-      case "open":
+      case "open": {
         store.dispatch({ type: "expand", cardId: intent.moduleId, source: "voice" });
+        const opened = findModule(intent.moduleId);
+        if (opened) void briefingFor(opened, lang).then((advice) => speak(advice.spoken, lang));
         break;
+      }
       case "rotate":
         store.dispatch({ type: "rotate", direction: intent.direction, source: "voice" });
         break;
@@ -83,7 +87,12 @@ export function useVoiceCommands() {
     }
 
     playBlip("confirm");
-    speak(replyFor(intent, lang), lang);
+    // Opening a module and searching each produce their own spoken answer once
+    // the data lands. Saying "Opening Instagram" first only gets cut off by it,
+    // and "opening" was never the useful half of the reply anyway.
+    if (intent.kind !== "open" && intent.kind !== "search") {
+      speak(replyFor(intent, lang), lang);
+    }
     setLastCommand(intent.label);
     if (clearTimer.current) clearTimeout(clearTimer.current);
     clearTimer.current = setTimeout(() => setLastCommand(null), COMMAND_DISPLAY_MS);

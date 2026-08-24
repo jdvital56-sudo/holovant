@@ -19,4 +19,24 @@ export const calendarModule: ModuleDefinition<CalendarSnapshot> = {
     { label: "Next event", value: d.nextEvent },
     { label: "Events today", value: `${d.eventsToday}` },
   ],
+  toAdvice: (d, lang) => {
+    const busy = d.eventsToday >= 4;
+    const tips =
+      lang === "ru"
+        ? [
+            `Сегодня ${d.eventsToday} встреч, ближайшая — ${d.nextEvent}`,
+            busy
+              ? "День плотный — глубокую работу между встречами не планируйте, она не поместится"
+              : "День свободный — хороший момент для длинной задачи",
+            "Заложите 10 минут на подготовку перед ближайшей встречей",
+          ]
+        : [
+            `${d.eventsToday} meetings today, next is ${d.nextEvent}`,
+            busy
+              ? "A packed day — do not plan deep work between meetings, it will not fit"
+              : "A light day — a good window for something long",
+            "Leave 10 minutes to prepare before the next one",
+          ];
+    return { spoken: `${tips[0]}. ${tips[1]}`, tips };
+  },
 };

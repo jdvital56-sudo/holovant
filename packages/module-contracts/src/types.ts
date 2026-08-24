@@ -34,6 +34,20 @@ export interface ModuleMetric {
   deltaPct?: number;
 }
 
+export type AdviceLang = "ru" | "en";
+
+/**
+ * What a module tells the user to do about its own numbers. A readout leaves
+ * the user to work out what a figure means; this is the part that makes the
+ * module worth opening.
+ */
+export interface ModuleAdvice {
+  /** One sentence, said aloud when the module opens. */
+  spoken: string;
+  /** Short actionable lines shown in the panel. */
+  tips: string[];
+}
+
 export interface ModuleDefinition<TData = unknown> {
   id: ModuleId;
   label: string;
@@ -48,4 +62,10 @@ export interface ModuleDefinition<TData = unknown> {
    * a new module can never silently expand into an empty panel.
    */
   toMetrics(data: TData): ModuleMetric[];
+  /**
+   * Required for the same reason as toMetrics: a module that cannot say what
+   * its numbers mean should not be addable. Rules today, and the seam an AI
+   * advisor plugs into later without the callers changing.
+   */
+  toAdvice(data: TData, lang: AdviceLang): ModuleAdvice;
 }

@@ -7,6 +7,8 @@ interface GestureState {
   currentGesture: string | null;
   confidence: number;
   errorMessage: string | null;
+  /** A held pinch: the scene holds completely still, camera drift included. */
+  locked: boolean;
 }
 
 export const useGestureStore = create<GestureState>(() => ({
@@ -14,7 +16,12 @@ export const useGestureStore = create<GestureState>(() => ({
   currentGesture: null,
   confidence: 0,
   errorMessage: null,
+  locked: false,
 }));
+
+export function setLocked(locked: boolean) {
+  if (useGestureStore.getState().locked !== locked) useGestureStore.setState({ locked });
+}
 
 export function setTrackingStatus(status: TrackingStatus) {
   useGestureStore.setState({ status, errorMessage: status === "error" ? useGestureStore.getState().errorMessage : null });
