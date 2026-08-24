@@ -34,3 +34,13 @@ body {
 body {
   font-family: var(--font-display);
 }
+
+/* Sweeps a short bar across its track while the renderer chunk loads. */
+@keyframes boot-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
