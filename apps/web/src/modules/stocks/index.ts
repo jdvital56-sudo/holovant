@@ -12,7 +12,7 @@ export const stocksModule: ModuleDefinition<StocksSnapshot> = {
   id: "stocks",
   label: "Stocks",
   tagline: "Portfolio performance",
-  themeColor: "#4fd1c5",
+  themeColor: "#6397f0",
   dataProvider: createMockProvider<StocksSnapshot>({
     portfolioValue: 182450,
     dayChangePct: 1.1,

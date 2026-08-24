@@ -10,7 +10,7 @@ export const newsModule: ModuleDefinition<NewsSnapshot> = {
   id: "news",
   label: "News",
   tagline: "Today's briefing",
-  themeColor: "#4fd1c5",
+  themeColor: "#52d1d9",
   dataProvider: createMockProvider<NewsSnapshot>({
     headline: "AI model releases accelerate again",
     unreadCount: 12,

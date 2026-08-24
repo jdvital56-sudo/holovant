@@ -10,7 +10,7 @@ export const projectsModule: ModuleDefinition<ProjectsSnapshot> = {
   id: "projects",
   label: "Projects",
   tagline: "Active builds",
-  themeColor: "#8b7bff",
+  themeColor: "#5fa1ec",
   dataProvider: createMockProvider<ProjectsSnapshot>({
     activeCount: 5,
     latestProject: "Holovant",

@@ -10,7 +10,7 @@ export const sportsModule: ModuleDefinition<SportsSnapshot> = {
   id: "sports",
   label: "Sports",
   tagline: "Live scores",
-  themeColor: "#5b8cff",
+  themeColor: "#5cabe9",
   dataProvider: createMockProvider<SportsSnapshot>({
     liveFixture: "Arsenal vs Man City",
     score: "1 - 1",

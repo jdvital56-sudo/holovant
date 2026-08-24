@@ -10,7 +10,7 @@ export const calendarModule: ModuleDefinition<CalendarSnapshot> = {
   id: "calendar",
   label: "Calendar",
   tagline: "Today's schedule",
-  themeColor: "#4fd1c5",
+  themeColor: "#59b5e5",
   dataProvider: createMockProvider<CalendarSnapshot>({
     nextEvent: "Design review — 15:00",
     eventsToday: 4,

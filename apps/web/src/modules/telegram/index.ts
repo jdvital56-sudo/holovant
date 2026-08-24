@@ -12,7 +12,7 @@ export const telegramModule: ModuleDefinition<TelegramSnapshot> = {
   id: "telegram",
   label: "Telegram",
   tagline: "Channel growth",
-  themeColor: "#4fd1c5",
+  themeColor: "#668df3",
   dataProvider: createMockProvider<TelegramSnapshot>({
     subscribers: 8100,
     weeklyGrowthPct: 3.5,

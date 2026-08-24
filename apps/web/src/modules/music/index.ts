@@ -10,7 +10,7 @@ export const musicModule: ModuleDefinition<MusicSnapshot> = {
   id: "music",
   label: "Music",
   tagline: "Now playing",
-  themeColor: "#8b7bff",
+  themeColor: "#50d5cf",
   dataProvider: createMockProvider<MusicSnapshot>({
     nowPlaying: "—",
     isPlaying: false,

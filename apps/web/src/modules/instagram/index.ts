@@ -12,7 +12,7 @@ export const instagramModule: ModuleDefinition<InstagramSnapshot> = {
   id: "instagram",
   label: "Instagram",
   tagline: "Followers & reach",
-  themeColor: "#5b8cff",
+  themeColor: "#957aff",
   dataProvider: createMockProvider<InstagramSnapshot>({
     followers: 48200,
     weeklyGrowthPct: 2.4,

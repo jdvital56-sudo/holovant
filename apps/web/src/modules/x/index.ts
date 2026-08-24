@@ -12,7 +12,7 @@ export const xModule: ModuleDefinition<XSnapshot> = {
   id: "x",
   label: "X",
   tagline: "Followers & impressions",
-  themeColor: "#8b7bff",
+  themeColor: "#6e79f8",
   dataProvider: createMockProvider<XSnapshot>({
     followers: 12800,
     weeklyGrowthPct: 0.9,

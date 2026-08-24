@@ -28,10 +28,33 @@ export function primeVoices() {
   window.speechSynthesis.onvoiceschanged = () => getVoices();
 }
 
+/**
+ * The API exposes no gender field, so male voices are identified by name.
+ * These are the ones actually shipped on Windows and Chrome; anything not
+ * listed falls back to whatever voice matches the language.
+ */
+const MALE_VOICE_NAMES: Record<SpeechLang, string[]> = {
+  ru: ["pavel", "dmitry", "yuri", "russian male"],
+  en: ["david", "mark", "george", "guy", "christopher", "male"],
+};
+
+const FEMALE_VOICE_HINTS = ["irina", "svetlana", "zira", "hazel", "female", "aria", "jenny"];
+
 function pickVoice(lang: SpeechLang): SpeechSynthesisVoice | null {
   const wanted = lang === "ru" ? "ru" : "en";
-  const voices = getVoices();
-  return voices.find((v) => v.lang.toLowerCase().startsWith(wanted)) ?? null;
+  const matching = getVoices().filter((v) => v.lang.toLowerCase().startsWith(wanted));
+  if (!matching.length) return null;
+
+  const named = matching.find((v) =>
+    MALE_VOICE_NAMES[lang].some((n) => v.name.toLowerCase().includes(n)),
+  );
+  if (named) return named;
+
+  // No known male voice installed — at least avoid the obviously female ones.
+  const notFemale = matching.find(
+    (v) => !FEMALE_VOICE_HINTS.some((n) => v.name.toLowerCase().includes(n)),
+  );
+  return notFemale ?? matching[0];
 }
 
 /**
@@ -69,8 +92,10 @@ export function speak(text: string, lang: SpeechLang = "ru") {
   const voice = pickVoice(lang);
   if (voice) utterance.voice = voice;
   utterance.lang = lang === "ru" ? "ru-RU" : "en-US";
-  utterance.rate = 1.05;
-  utterance.pitch = 1;
+  utterance.rate = 1.02;
+  // Slightly under neutral: reinforces the male voice, and keeps it under the
+  // synthesiser's brighter default when only a generic voice is installed.
+  utterance.pitch = 0.85;
   utterance.volume = 0.9;
 
   // Without this the recogniser hears the reply and acts on it — "Opening

@@ -6,12 +6,22 @@ import { qualityPresets, TIER_ORDER } from "./qualityPresets";
 import { useQualityStore, setMeasuredFps, setTier } from "./qualityStore";
 
 /** Sustained frame rate below this means the current tier is too expensive. */
-const DOWNGRADE_FPS = 50;
-/** Headroom must be this good before spending it again. */
-const UPGRADE_FPS = 58;
+const DOWNGRADE_FPS = 45;
+/**
+ * Deliberately under 60: a display refreshing at 60Hz almost never averages
+ * above it, so a threshold nearer 60 is one quality can fall through but never
+ * climb back — the scene ends up stuck at minimal on hardware that was coping.
+ */
+const UPGRADE_FPS = 54;
 /** Slow to give up quality, slower still to reclaim it — prevents oscillation. */
-const DOWNGRADE_AFTER_MS = 2000;
-const UPGRADE_AFTER_MS = 6000;
+const DOWNGRADE_AFTER_MS = 2500;
+const UPGRADE_AFTER_MS = 5000;
+/**
+ * Nothing is judged during startup. Compiling shaders, warming caches and the
+ * dev server's first compile all stall early frames, and reacting to that
+ * drops quality before the scene has had a chance to run.
+ */
+const WARMUP_MS = 4000;
 /** Reporting cadence; measurement itself happens every frame. */
 const REPORT_INTERVAL_MS = 400;
 /** Smoothing factor for the running average (higher = more reactive). */
@@ -29,6 +39,7 @@ export function QualityGovernor() {
   const badSince = useRef<number | null>(null);
   const goodSince = useRef<number | null>(null);
   const lastReport = useRef(0);
+  const startedAt = useRef(0);
 
   useEffect(() => {
     setDpr(Math.min(window.devicePixelRatio, qualityPresets[tier].pixelRatioCap));
@@ -45,6 +56,9 @@ export function QualityGovernor() {
       lastReport.current = now;
       setMeasuredFps(Math.round(fps));
     }
+
+    startedAt.current ||= now;
+    if (now - startedAt.current < WARMUP_MS) return;
 
     const index = TIER_ORDER.indexOf(tier);
 

@@ -12,7 +12,7 @@ export const linkedinModule: ModuleDefinition<LinkedinSnapshot> = {
   id: "linkedin",
   label: "LinkedIn",
   tagline: "Network growth",
-  themeColor: "#5b8cff",
+  themeColor: "#6a83f5",
   dataProvider: createMockProvider<LinkedinSnapshot>({
     followers: 5400,
     weeklyGrowthPct: 2.2,

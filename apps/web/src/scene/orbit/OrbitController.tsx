@@ -1,17 +1,28 @@
 "use client";
 
+import { useEffect } from "react";
 import { moduleRegistry } from "@/modules/registry";
+import { loadAllModuleData } from "@/modules/moduleDataStore";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { useSpringNumber } from "@/motion/useSpringNumber";
 import { CardSprings } from "@holovant/motion-vocabulary";
 import { HolographicCard } from "../cards/HolographicCard";
 
-const RADIUS = 3.4;
+/**
+ * Wide enough that fifteen cards sit side by side without overlapping. Cards
+ * grew when they gained real content, and at the old radius they collided —
+ * neighbours bled through each other and the charts ran together into one band.
+ */
+const RADIUS = 5.2;
 
 export function OrbitController() {
   const targetRotation = useOrbitStore((s) => s.rotation);
   const rotationDeg = useSpringNumber(targetRotation, CardSprings.idle);
   const step = 360 / moduleRegistry.length;
+
+  useEffect(() => {
+    loadAllModuleData();
+  }, []);
 
   return (
     <group>

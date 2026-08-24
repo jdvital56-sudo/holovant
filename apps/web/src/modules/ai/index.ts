@@ -9,7 +9,7 @@ export const aiModule: ModuleDefinition<AiSnapshot> = {
   id: "ai",
   label: "AI",
   tagline: "Knowledge & reasoning",
-  themeColor: "#5b8cff",
+  themeColor: "#54c8dd",
   dataProvider: createMockProvider<AiSnapshot>({
     status: "idle",
   }),

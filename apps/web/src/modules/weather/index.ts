@@ -10,7 +10,7 @@ export const weatherModule: ModuleDefinition<WeatherSnapshot> = {
   id: "weather",
   label: "Weather",
   tagline: "Current conditions",
-  themeColor: "#8b7bff",
+  themeColor: "#57bfe1",
   dataProvider: createMockProvider<WeatherSnapshot>({
     condition: "clear",
     temperatureC: 21,

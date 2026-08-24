@@ -14,7 +14,7 @@ import { PostEffects } from "./PostEffects";
  */
 export function HolographicScene() {
   return (
-    <Canvas camera={{ position: [0, 0.6, 8.5], fov: 45 }}>
+    <Canvas camera={{ position: [0, 0.6, 10.6], fov: 45 }}>
       <color attach="background" args={["#05070b"]} />
       <fog attach="fog" args={["#05070b", 6, 16]} />
       <ambientLight intensity={0.5} />

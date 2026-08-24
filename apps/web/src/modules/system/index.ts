@@ -11,7 +11,7 @@ export const systemModule: ModuleDefinition<SystemSnapshot> = {
   id: "system",
   label: "System",
   tagline: "Diagnostics",
-  themeColor: "#5b8cff",
+  themeColor: "#4ed0bf",
   dataProvider: createMockProvider<SystemSnapshot>({
     cpuPct: 18,
     gpuPct: 34,

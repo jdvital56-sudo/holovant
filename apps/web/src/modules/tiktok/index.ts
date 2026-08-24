@@ -12,7 +12,7 @@ export const tiktokModule: ModuleDefinition<TiktokSnapshot> = {
   id: "tiktok",
   label: "TikTok",
   tagline: "Views & engagement",
-  themeColor: "#5b8cff",
+  themeColor: "#8476fd",
   dataProvider: createMockProvider<TiktokSnapshot>({
     followers: 96500,
     weeklyGrowthPct: 4.1,

@@ -8,6 +8,7 @@ import { useAudioStore, toggleAudio } from "@/audio/audioStore";
 import { useInteractionSounds } from "@/audio/useInteractionSounds";
 import { useVoiceCommands } from "@/voice/useVoiceCommands";
 import { useVoiceStore } from "@/voice/voiceStore";
+import { useCardStyleStore, cycleCardStyle, CARD_STYLE_LABEL } from "@/stores/cardStyleStore";
 import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
 import { CameraFeed } from "./CameraFeed";
 import { moduleRegistry } from "@/modules/registry";
@@ -60,6 +61,7 @@ export function HUD() {
   const transcript = useVoiceStore((s) => s.transcript);
   const lastCommand = useVoiceStore((s) => s.lastCommand);
   const voiceError = useVoiceStore((s) => s.errorMessage);
+  const cardStyle = useCardStyleStore((s) => s.style);
   useInteractionSounds();
 
   return (
@@ -112,6 +114,14 @@ export function HUD() {
           </span>
         </button>
         {voiceError && <div className="text-[10px] text-warn mt-1 max-w-[220px]">{voiceError}</div>}
+        <button
+          type="button"
+          onClick={cycleCardStyle}
+          className="block text-[11px] text-mist mt-1 hover:text-frost transition-colors cursor-pointer"
+        >
+          CARDS &mdash; <span className="text-signal">{CARD_STYLE_LABEL[cardStyle]}</span>
+          <span className="text-mist/60"> (click to change)</span>
+        </button>
       </div>
 
       <div className="pointer-events-auto col-start-2 row-start-1 justify-self-end text-right">

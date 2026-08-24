@@ -12,7 +12,7 @@ export const youtubeModule: ModuleDefinition<YoutubeSnapshot> = {
   id: "youtube",
   label: "YouTube",
   tagline: "Subscribers & views",
-  themeColor: "#4fd1c5",
+  themeColor: "#7372fb",
   dataProvider: createMockProvider<YoutubeSnapshot>({
     subscribers: 34200,
     weeklyGrowthPct: 1.8,
