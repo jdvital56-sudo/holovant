@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { useGestureStore } from "@/stores/gestureStore";
 import { useQualityStore } from "@/quality/qualityStore";
+import { useAudioStore, toggleAudio } from "@/audio/audioStore";
+import { useInteractionSounds } from "@/audio/useInteractionSounds";
 import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
 import { CameraFeed } from "./CameraFeed";
 import { moduleRegistry } from "@/modules/registry";
@@ -44,6 +46,8 @@ export function HUD() {
   const errorMessage = useGestureStore((s) => s.errorMessage);
   const fps = useQualityStore((s) => s.fps);
   const tier = useQualityStore((s) => s.tier);
+  const audioOn = useAudioStore((s) => s.enabled);
+  useInteractionSounds();
 
   return (
     // translate="no" keeps browser translators from replacing these text
@@ -72,6 +76,14 @@ export function HUD() {
           <span className="text-mist/60"> (click to {status === "off" || status === "error" ? "enable" : "disable"})</span>
         </button>
         {errorMessage && <div className="text-[10px] text-warn mt-1 max-w-[220px]">{errorMessage}</div>}
+        <button
+          type="button"
+          onClick={() => void toggleAudio()}
+          className="block text-[11px] text-mist mt-1 hover:text-frost transition-colors cursor-pointer"
+        >
+          AUDIO &mdash; <span className={audioOn ? "text-signal" : "text-frost"}>{audioOn ? "ON" : "OFF"}</span>
+          <span className="text-mist/60"> (click to {audioOn ? "disable" : "enable"})</span>
+        </button>
       </div>
 
       <div className="pointer-events-auto col-start-2 row-start-1 justify-self-end text-right">
