@@ -84,3 +84,35 @@ export function matchIntent(rawTranscript: string): VoiceIntent | null {
 
   return null;
 }
+
+/**
+ * The line the system says back. Confirming out loud is what makes voice feel
+ * answered rather than ignored — without it a command that worked and a
+ * command that was misheard look identical from across the room.
+ */
+export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
+  const moduleLabel =
+    intent.kind === "open"
+      ? (moduleRegistry.find((m) => m.id === intent.moduleId)?.label ?? "")
+      : "";
+
+  if (lang === "ru") {
+    switch (intent.kind) {
+      case "open":
+        return `Открываю ${moduleLabel}`;
+      case "rotate":
+        return intent.direction === "left" ? "Влево" : "Вправо";
+      case "close":
+        return "Закрываю";
+    }
+  }
+
+  switch (intent.kind) {
+    case "open":
+      return `Opening ${moduleLabel}`;
+    case "rotate":
+      return intent.direction === "left" ? "Left" : "Right";
+    case "close":
+      return "Closing";
+  }
+}

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef } from "react";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { playBlip } from "@/audio/audioStore";
 import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes";
-import { matchIntent } from "./commandEngine";
+import { matchIntent, replyFor } from "./commandEngine";
+import { speak, stopSpeaking, primeVoices, isSystemSpeaking, type SpeechLang } from "./speech";
 import {
   useVoiceStore,
   setVoiceStatus,
@@ -44,7 +45,7 @@ export function useVoiceCommands() {
   const wantsRunning = useRef(false);
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const runIntent = useCallback((transcript: string) => {
+  const runIntent = useCallback((transcript: string, lang: SpeechLang) => {
     const intent = matchIntent(transcript);
     if (!intent) return;
 
@@ -62,6 +63,7 @@ export function useVoiceCommands() {
     }
 
     playBlip("confirm");
+    speak(replyFor(intent, lang), lang);
     setLastCommand(intent.label);
     if (clearTimer.current) clearTimeout(clearTimer.current);
     clearTimer.current = setTimeout(() => setLastCommand(null), COMMAND_DISPLAY_MS);
@@ -78,10 +80,12 @@ export function useVoiceCommands() {
     setVoiceStatus("starting");
     wantsRunning.current = true;
 
+    primeVoices();
     const recognition = new Recognition();
     // Russian first: the founder tests in Russian, and the command engine
     // understands both languages regardless of which the recogniser uses.
-    recognition.lang = navigator.language?.startsWith("ru") ? "ru-RU" : "en-US";
+    const lang: SpeechLang = navigator.language?.startsWith("ru") ? "ru" : "en";
+    recognition.lang = lang === "ru" ? "ru-RU" : "en-US";
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
@@ -89,13 +93,17 @@ export function useVoiceCommands() {
     recognition.onstart = () => setVoiceStatus("listening");
 
     recognition.onresult = (event) => {
+      // Everything heard while the system is talking is its own reply coming
+      // back through the microphone, so it is dropped rather than obeyed.
+      if (isSystemSpeaking()) return;
+
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         const text = result[0]?.transcript ?? "";
         if (result.isFinal) {
           setTranscript(text.trim());
-          runIntent(text);
+          runIntent(text, lang);
         } else {
           interim += text;
         }
@@ -140,6 +148,7 @@ export function useVoiceCommands() {
     wantsRunning.current = false;
     recognitionRef.current?.stop();
     recognitionRef.current = null;
+    stopSpeaking();
     setVoiceStatus("off");
     setTranscript("");
     setLastCommand(null);
@@ -149,6 +158,7 @@ export function useVoiceCommands() {
     () => () => {
       wantsRunning.current = false;
       recognitionRef.current?.abort();
+      stopSpeaking();
       if (clearTimer.current) clearTimeout(clearTimer.current);
     },
     [],

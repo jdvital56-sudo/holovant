@@ -150,11 +150,18 @@ export function HUD() {
       {/* Centred: what was heard is feedback about the user's own speech, so it
           belongs in the middle of their attention, not filed in a corner. */}
       {voiceStatus === "listening" && (
-        <div className="col-span-2 row-start-3 self-end justify-self-center mb-16 text-center max-w-md">
+        <div className="col-span-2 row-start-3 self-end justify-self-center mb-14 w-full max-w-lg text-center">
           {lastCommand && (
-            <div className="text-[11px] tracking-widest uppercase text-signal mb-1">{lastCommand}</div>
+            <div className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-signal drop-shadow-[0_0_12px_rgba(111,179,255,0.5)]">
+              ✓ {lastCommand}
+            </div>
           )}
-          <div className="text-[12px] text-mist truncate">{transcript || "say a command…"}</div>
+          <div className="flex items-center justify-center gap-2 rounded-full border border-signal/25 bg-[rgba(16,24,38,0.6)] px-4 py-2 backdrop-blur-md">
+            <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-signal" />
+            <span className="truncate text-[13px] text-frost">
+              {transcript || <span className="text-mist">listening — say “open Instagram”</span>}
+            </span>
+          </div>
         </div>
       )}
 
