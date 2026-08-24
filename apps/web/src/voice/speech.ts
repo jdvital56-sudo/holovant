@@ -163,28 +163,98 @@ async function speakOnServer(text: string, sequence: number): Promise<boolean> {
  */
 export function speak(text: string, lang: SpeechLang = "ru") {
   if (!text) return;
+  queue.length = 0;
   const sequence = ++speechSequence;
-
   stopServerVoice();
   if (isSpeechSynthesisAvailable()) window.speechSynthesis.cancel();
   // Held from the moment the line is requested, not from when audio starts, so
   // the microphone cannot pick up the reply during synthesis either.
   speaking = true;
+  void deliver(text, lang, sequence);
+}
 
-  void speakOnServer(text, sequence).then((spoken) => {
-    if (spoken || sequence !== speechSequence) return;
-    speakInBrowser(text, lang);
+const queue: Array<{ text: string; lang: SpeechLang }> = [];
+let draining = false;
+
+/**
+ * Speaks a line after everything already waiting, instead of replacing it.
+ *
+ * A streamed answer arrives a sentence at a time; interrupting on each one
+ * would leave only the last sentence audible. Interruption is still the right
+ * behaviour for one-off confirmations, which is what `speak` is for.
+ */
+export function speakQueued(text: string, lang: SpeechLang = "ru") {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  queue.push({ text: trimmed, lang });
+  speaking = true;
+  void drain();
+}
+
+async function drain() {
+  if (draining) return;
+  draining = true;
+  try {
+    while (queue.length) {
+      const next = queue.shift();
+      if (!next) break;
+      const sequence = speechSequence;
+      await deliver(next.text, next.lang, sequence);
+      // A newer interruption bumped the sequence; the rest of this answer is
+      // no longer wanted.
+      if (sequence !== speechSequence) {
+        queue.length = 0;
+        break;
+      }
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+/** Speaks one line and resolves when its audio has finished, not when it starts. */
+async function deliver(text: string, lang: SpeechLang, sequence: number): Promise<void> {
+  const playedOnServer = await speakOnServer(text, sequence);
+  if (sequence !== speechSequence) return;
+  if (playedOnServer) {
+    await waitForCurrentAudio();
+    return;
+  }
+  await speakInBrowserAwaited(text, lang);
+}
+
+function waitForCurrentAudio(): Promise<void> {
+  const audio = currentAudio;
+  if (!audio) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => resolve();
+    audio.addEventListener("ended", finish, { once: true });
+    audio.addEventListener("error", finish, { once: true });
   });
 }
 
-function speakInBrowser(text: string, lang: SpeechLang) {
-  if (!isSpeechSynthesisAvailable()) {
-    markDone();
-    return;
-  }
-  const synth = window.speechSynthesis;
-  synth.cancel();
+function speakInBrowserAwaited(text: string, lang: SpeechLang): Promise<void> {
+  return new Promise((resolve) => {
+    if (!isSpeechSynthesisAvailable()) {
+      markDone();
+      resolve();
+      return;
+    }
+    const synth = window.speechSynthesis;
+    const utterance = buildUtterance(text, lang);
+    utterance.onend = () => {
+      markDone();
+      resolve();
+    };
+    utterance.onerror = () => {
+      markDone();
+      resolve();
+    };
+    synth.speak(utterance);
+  });
+}
 
+function buildUtterance(text: string, lang: SpeechLang) {
   const utterance = new SpeechSynthesisUtterance(text);
   const voice = pickVoice(lang);
   if (voice) utterance.voice = voice;
@@ -195,18 +265,16 @@ function speakInBrowser(text: string, lang: SpeechLang) {
   utterance.pitch = 0.85;
   utterance.volume = 0.9;
 
-  // Without this the recogniser hears the reply and acts on it — "Opening
+  // Held so the recogniser does not hear the reply and act on it — "Opening
   // Instagram" contains the very word that opens Instagram.
   speaking = true;
   if (settleTimer) clearTimeout(settleTimer);
-  utterance.onend = markDone;
-  utterance.onerror = markDone;
-
-  synth.speak(utterance);
+  return utterance;
 }
 
 export function stopSpeaking() {
   speechSequence++;
+  queue.length = 0;
   stopServerVoice();
   if (!isSpeechSynthesisAvailable()) {
     speaking = false;

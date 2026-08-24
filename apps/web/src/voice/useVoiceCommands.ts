@@ -8,6 +8,10 @@ import { matchIntent, replyFor } from "./commandEngine";
 import { speak, stopSpeaking, primeVoices, isSystemSpeaking, type SpeechLang } from "./speech";
 import { runSearch, clearSearch } from "./searchStore";
 import { briefingFor, findModule } from "@/modules/briefing";
+import { askAssistant, clearChat } from "./chatStore";
+
+/** Below this a transcript is almost always a stray noise, not a question. */
+const MIN_QUESTION_WORDS = 2;
 import {
   useVoiceStore,
   setVoiceStatus,
@@ -49,7 +53,21 @@ export function useVoiceCommands() {
 
   const runIntent = useCallback((transcript: string, lang: SpeechLang) => {
     const intent = matchIntent(transcript);
-    if (!intent) return;
+
+    if (!intent) {
+      // Not a command, so treat it as something said to the assistant. Anything
+      // shorter than this is almost always the recogniser catching a stray
+      // noise, and answering those would make the system talk to itself.
+      const question = transcript.trim();
+      if (question.split(/\s+/).length < MIN_QUESTION_WORDS) return;
+
+      const openModuleId = useOrbitStore.getState().expandedId;
+      const openModule = openModuleId ? findModule(openModuleId) : undefined;
+      playBlip("confirm");
+      setLastCommand(lang === "ru" ? "вопрос" : "question");
+      void askAssistant(question, openModule?.label ?? null, lang);
+      return;
+    }
 
     const store = useOrbitStore.getState();
     switch (intent.kind) {
@@ -178,6 +196,7 @@ export function useVoiceCommands() {
     recognitionRef.current?.stop();
     recognitionRef.current = null;
     stopSpeaking();
+    clearChat();
     setVoiceStatus("off");
     setTranscript("");
     setLastCommand(null);
