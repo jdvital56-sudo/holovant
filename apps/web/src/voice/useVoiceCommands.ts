@@ -6,6 +6,7 @@ import { playBlip } from "@/audio/audioStore";
 import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes";
 import { matchIntent, replyFor } from "./commandEngine";
 import { speak, stopSpeaking, primeVoices, isSystemSpeaking, type SpeechLang } from "./speech";
+import { runSearch, clearSearch } from "./searchStore";
 import {
   useVoiceStore,
   setVoiceStatus,
@@ -59,6 +60,25 @@ export function useVoiceCommands() {
         break;
       case "close":
         store.dispatch({ type: "collapse", source: "voice" });
+        clearSearch();
+        break;
+      case "search":
+        void runSearch(intent.query).then((results) => {
+          // Spoken after the fact, because the answer is the point of a search
+          // — announcing only that one started leaves the user waiting blind.
+          if (!results.length) {
+            speak(lang === "ru" ? "Ничего не нашёл" : "Nothing found", lang);
+            return;
+          }
+          const count = results.length;
+          const first = results[0].title;
+          speak(
+            lang === "ru"
+              ? `Нашёл ${count}. Первый: ${first}`
+              : `Found ${count}. First: ${first}`,
+            lang,
+          );
+        });
         break;
     }
 

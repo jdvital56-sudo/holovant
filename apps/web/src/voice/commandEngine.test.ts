@@ -42,6 +42,33 @@ describe("matchIntent — closing", () => {
   });
 });
 
+describe("matchIntent — web search", () => {
+  it("searches from either language", () => {
+    expect(matchIntent("найди лоу-фай музыку")).toMatchObject({
+      kind: "search",
+      query: "лоу-фай музыку",
+    });
+    expect(matchIntent("search for nvidia earnings")).toMatchObject({
+      kind: "search",
+      query: "nvidia earnings",
+    });
+  });
+
+  it("beats module opening when the query names a module", () => {
+    // "find some music" is a request to search, not to open the Music module.
+    expect(matchIntent("найди музыку Radiohead")).toMatchObject({ kind: "search" });
+    expect(matchIntent("search for instagram growth tips")).toMatchObject({ kind: "search" });
+  });
+
+  it("strips leading filler but keeps it inside the query", () => {
+    expect(matchIntent("найди мне про кофе")).toMatchObject({ kind: "search", query: "кофе" });
+  });
+
+  it("ignores a search verb with nothing to search for", () => {
+    expect(matchIntent("найди")).toBeNull();
+  });
+});
+
 describe("matchIntent — refusing to guess", () => {
   it("returns null for speech that is not a command", () => {
     expect(matchIntent("what time is the meeting tomorrow")).toBeNull();

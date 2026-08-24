@@ -1,6 +1,7 @@
 import { SceneRoot } from "@/scene/core/SceneRoot";
 import { HUD } from "@/hud/HUD";
 import { ModulePanel } from "@/hud/ModulePanel";
+import { SearchResults } from "@/hud/SearchResults";
 
 export default function Home() {
   return (
@@ -8,6 +9,7 @@ export default function Home() {
       <SceneRoot />
       <HUD />
       <ModulePanel />
+      <SearchResults />
       <div className="fixed top-4 sm:top-8 left-1/2 -translate-x-1/2 z-10 pointer-events-none text-center">
         <div className="text-xs tracking-[0.3em] font-semibold text-frost">HOLOVANT</div>
       </div>

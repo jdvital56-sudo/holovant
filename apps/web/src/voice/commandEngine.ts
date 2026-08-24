@@ -4,7 +4,8 @@ import { moduleRegistry } from "@/modules/registry";
 export type VoiceIntent =
   | { kind: "open"; moduleId: ModuleId; label: string }
   | { kind: "rotate"; direction: "left" | "right"; label: string }
-  | { kind: "close"; label: string };
+  | { kind: "close"; label: string }
+  | { kind: "search"; query: string; label: string };
 
 /**
  * Spoken names per module, in both languages the founder tests in. Recognisers
@@ -47,6 +48,51 @@ function containsAny(haystack: string, needles: string[]) {
 }
 
 /**
+ * Verbs that introduce a web search, longest first so "поищи" is not consumed
+ * by a shorter prefix of itself.
+ */
+const SEARCH_VERBS = [
+  "search the web for",
+  "search for",
+  "look up",
+  "search",
+  "google",
+  "найди в интернете",
+  "поищи в интернете",
+  "поищи",
+  "найди",
+  "найти",
+  "погугли",
+  "загугли",
+];
+
+/** Filler that survives the verb but is not part of what to search for. */
+const SEARCH_FILLER = ["мне", "пожалуйста", "please", "me", "for", "про", "about"];
+
+const MIN_QUERY_WORDS = 1;
+
+function matchSearch(text: string): VoiceIntent | null {
+  const verb = SEARCH_VERBS.find((v) => text.startsWith(`${v} `) || text === v);
+  if (!verb) return null;
+
+  let query = text.slice(verb.length).trim();
+  // Strip leading filler only: the same words can be meaningful inside a query.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const filler of SEARCH_FILLER) {
+      if (query.startsWith(`${filler} `)) {
+        query = query.slice(filler.length + 1).trim();
+        changed = true;
+      }
+    }
+  }
+
+  if (query.split(" ").filter(Boolean).length < MIN_QUERY_WORDS) return null;
+  return { kind: "search", query, label: `search “${query}”` };
+}
+
+/**
  * Matches a spoken phrase to an intent. Returns null when nothing matches, so
  * the caller can leave the carousel alone rather than guess — a wrong guess
  * moves the interface under the user for no reason.
@@ -54,6 +100,12 @@ function containsAny(haystack: string, needles: string[]) {
 export function matchIntent(rawTranscript: string): VoiceIntent | null {
   const text = normalise(rawTranscript);
   if (!text) return null;
+
+  // Search is matched first and wins outright: "find some music" names a module
+  // as its subject, and treating that as "open Music" would answer a question
+  // the user did not ask.
+  const search = matchSearch(text);
+  if (search) return search;
 
   // Naming exactly one direction is treated as a rotation, with or without a
   // verb — "rotate left" and a bare "left" mean the same thing out loud. Both
@@ -104,6 +156,8 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
         return intent.direction === "left" ? "Влево" : "Вправо";
       case "close":
         return "Закрываю";
+      case "search":
+        return `Ищу: ${intent.query}`;
     }
   }
 
@@ -114,5 +168,7 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
       return intent.direction === "left" ? "Left" : "Right";
     case "close":
       return "Closing";
+    case "search":
+      return `Searching for ${intent.query}`;
   }
 }
