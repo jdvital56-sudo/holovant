@@ -1,4 +1,4 @@
-export type InputSource = "mouse" | "keyboard" | "gesture";
+export type InputSource = "mouse" | "keyboard" | "gesture" | "voice";
 
 /**
  * The single contract both the mouse/keyboard adapter and the MediaPipe

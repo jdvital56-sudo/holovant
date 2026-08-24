@@ -6,6 +6,8 @@ import { useGestureStore } from "@/stores/gestureStore";
 import { useQualityStore } from "@/quality/qualityStore";
 import { useAudioStore, toggleAudio } from "@/audio/audioStore";
 import { useInteractionSounds } from "@/audio/useInteractionSounds";
+import { useVoiceCommands } from "@/voice/useVoiceCommands";
+import { useVoiceStore } from "@/voice/voiceStore";
 import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
 import { CameraFeed } from "./CameraFeed";
 import { moduleRegistry } from "@/modules/registry";
@@ -36,6 +38,13 @@ const STATUS_LABEL: Record<string, string> = {
   error: "ERROR",
 };
 
+const VOICE_LABEL: Record<string, string> = {
+  off: "OFF",
+  starting: "STARTING…",
+  listening: "LISTENING",
+  error: "ERROR",
+};
+
 export function HUD() {
   const now = useClock();
   const selectedId = useOrbitStore((s) => s.selectedId);
@@ -47,6 +56,10 @@ export function HUD() {
   const fps = useQualityStore((s) => s.fps);
   const tier = useQualityStore((s) => s.tier);
   const audioOn = useAudioStore((s) => s.enabled);
+  const { status: voiceStatus, enable: enableVoice, disable: disableVoice } = useVoiceCommands();
+  const transcript = useVoiceStore((s) => s.transcript);
+  const lastCommand = useVoiceStore((s) => s.lastCommand);
+  const voiceError = useVoiceStore((s) => s.errorMessage);
   useInteractionSounds();
 
   return (
@@ -84,6 +97,21 @@ export function HUD() {
           AUDIO &mdash; <span className={audioOn ? "text-signal" : "text-frost"}>{audioOn ? "ON" : "OFF"}</span>
           <span className="text-mist/60"> (click to {audioOn ? "disable" : "enable"})</span>
         </button>
+        <button
+          type="button"
+          onClick={voiceStatus === "off" || voiceStatus === "error" ? enableVoice : disableVoice}
+          className="block text-[11px] text-mist mt-1 hover:text-frost transition-colors cursor-pointer"
+        >
+          VOICE &mdash;{" "}
+          <span className={voiceStatus === "listening" ? "text-signal" : "text-frost"}>
+            {VOICE_LABEL[voiceStatus]}
+          </span>
+          <span className="text-mist/60">
+            {" "}
+            (click to {voiceStatus === "off" || voiceStatus === "error" ? "enable" : "disable"})
+          </span>
+        </button>
+        {voiceError && <div className="text-[10px] text-warn mt-1 max-w-[220px]">{voiceError}</div>}
       </div>
 
       <div className="pointer-events-auto col-start-2 row-start-1 justify-self-end text-right">
@@ -118,6 +146,17 @@ export function HUD() {
           {status === "active" ? "HAND TRACKING ACTIVE" : "MOUSE FALLBACK ACTIVE"}
         </div>
       </div>
+
+      {/* Centred: what was heard is feedback about the user's own speech, so it
+          belongs in the middle of their attention, not filed in a corner. */}
+      {voiceStatus === "listening" && (
+        <div className="col-span-2 row-start-3 self-end justify-self-center mb-16 text-center max-w-md">
+          {lastCommand && (
+            <div className="text-[11px] tracking-widest uppercase text-signal mb-1">{lastCommand}</div>
+          )}
+          <div className="text-[12px] text-mist truncate">{transcript || "say a command…"}</div>
+        </div>
+      )}
 
       <CameraFeed videoRef={videoRef} />
     </div>
