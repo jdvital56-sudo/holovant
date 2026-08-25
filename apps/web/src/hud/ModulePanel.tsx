@@ -46,9 +46,9 @@ function useModuleContent(activeModule: ModuleDefinition | undefined, accountId:
       setTips(activeModule.toAdvice(data, lang).tips);
     });
 
-    // Weather is the one module whose mock reading would be actively wrong, so
-    // it is replaced with a live one as soon as that arrives.
-    if (activeModule.id === "weather") {
+    // Weather and system report on conditions right now, so their mock
+    // readings are replaced with real ones as soon as those arrive.
+    if (activeModule.id === "weather" || activeModule.id === "system") {
       void briefingFor(activeModule, lang).then((advice) => {
         if (active) setTips(advice.tips);
       });
@@ -209,7 +209,7 @@ export function ModulePanel() {
             </div>
           )}
 
-          {activeModule.id !== "weather" && (
+          {activeModule.id !== "weather" && activeModule.id !== "system" && (
             <p className="mt-5 font-mono text-[10px] leading-relaxed text-mist/70">
               Sample data — live {activeModule.label} connection arrives with the integrations phase.
             </p>

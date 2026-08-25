@@ -2,16 +2,25 @@ import type { AdviceLang, ModuleAdvice, ModuleDefinition } from "@holovant/modul
 import { moduleRegistry } from "./registry";
 import { loadWeather } from "./weather/weatherStore";
 import { spokenWeather, adviceFor } from "./weather/advice";
+import { runSystemCheck } from "./system/systemStore";
+import { systemAdvice } from "./system/report";
 
 /**
- * What a module has to say when it opens. Every module gives advice from its
- * own snapshot; weather additionally replaces its mock reading with a live
- * one first, since a forecast that is not today's is worse than none.
+ * What a module has to say when it opens.
+ *
+ * Most speak from their own snapshot. Two cannot: weather and system are about
+ * conditions right now, and a made-up reading from either is worse than none —
+ * a system module reporting invented load is the least defensible of all.
  */
 export async function briefingFor(
   module: ModuleDefinition,
   lang: AdviceLang,
 ): Promise<ModuleAdvice> {
+  if (module.id === "system") {
+    const report = await runSystemCheck();
+    return systemAdvice(report, lang);
+  }
+
   if (module.id === "weather") {
     const live = await loadWeather();
     if (live) {
