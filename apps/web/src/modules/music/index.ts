@@ -25,12 +25,12 @@ export const musicModule: ModuleDefinition<MusicSnapshot> = {
       lang === "ru"
         ? [
             idle ? "Сейчас ничего не играет" : `Играет: ${d.nowPlaying}`,
-            "Скажите «включи» и название — найду и открою трек",
+            "Скажите «включи» и название — найду трек и открою его",
             "Для работы лучше идёт инструментал — слова тянут внимание на себя",
           ]
         : [
             idle ? "Nothing playing right now" : `Playing: ${d.nowPlaying}`,
-            "Say “play” and a title — I will find and open it",
+            "Say “play” and a title — I will find the track and open it",
             "Instrumental works better for focus — lyrics compete for attention",
           ];
     return { spoken: `${tips[0]}. ${tips[1]}`, tips };

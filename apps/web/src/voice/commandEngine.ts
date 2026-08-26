@@ -5,29 +5,38 @@ export type VoiceIntent =
   | { kind: "open"; moduleId: ModuleId; label: string }
   | { kind: "rotate"; direction: "left" | "right"; label: string }
   | { kind: "close"; label: string }
-  | { kind: "search"; query: string; label: string };
+  | { kind: "search"; query: string; label: string }
+  | { kind: "play"; query: string; label: string };
 
 /**
  * Spoken names per module, in both languages the founder tests in. Recognisers
  * transcribe brand names inconsistently ("тик ток", "тикток", "tick tock"), so
  * each module carries several spellings rather than one canonical label.
  */
+/**
+ * Written as word stems, not whole words.
+ *
+ * Russian inflects: the module is "музыка" but nobody says that out loud —
+ * they say "включи музыку". Matching on the full form silently failed for
+ * every accusative, which is the case a command is normally spoken in, and
+ * sent "открой систему" and "покажи погоду" off to the assistant as questions.
+ */
 const MODULE_ALIASES: Record<ModuleId, string[]> = {
-  instagram: ["instagram", "insta", "инстаграм", "инста", "инстаграмм"],
+  instagram: ["instagram", "insta", "инстаграм", "инста"],
   tiktok: ["tiktok", "tik tok", "тикток", "тик ток"],
   youtube: ["youtube", "you tube", "ютуб", "ютьюб"],
   x: ["twitter", "твиттер", "икс"],
   linkedin: ["linkedin", "linked in", "линкедин"],
-  telegram: ["telegram", "телеграм", "телега", "телеграмм"],
-  stocks: ["stocks", "stock", "portfolio", "акции", "биржа", "портфель"],
-  projects: ["projects", "project", "проекты", "проект"],
+  telegram: ["telegram", "телеграм", "телег"],
+  stocks: ["stocks", "stock", "portfolio", "акци", "бирж", "портфел"],
+  projects: ["projects", "project", "проект"],
   sports: ["sports", "sport", "спорт"],
-  calendar: ["calendar", "schedule", "календарь", "расписание"],
-  weather: ["weather", "погода"],
+  calendar: ["calendar", "schedule", "календар", "расписани"],
+  weather: ["weather", "погод"],
   ai: ["ai", "assistant", "ии", "ассистент"],
-  news: ["news", "новости"],
-  music: ["music", "музыка"],
-  system: ["system", "система", "диагностика"],
+  news: ["news", "новост"],
+  music: ["music", "музык"],
+  system: ["system", "систем", "диагностик"],
 };
 
 const OPEN_VERBS = ["open", "show", "go to", "открой", "покажи", "открыть", "показать"];
@@ -71,6 +80,57 @@ const SEARCH_FILLER = ["мне", "пожалуйста", "please", "me", "for", 
 
 const MIN_QUERY_WORDS = 1;
 
+/** Verbs that ask for something to be played, longest first. */
+const PLAY_VERBS = [
+  "воспроизведи",
+  "поставь трек",
+  "поставь песню",
+  "включи трек",
+  "включи песню",
+  "включи",
+  "поставь",
+  "play",
+  "put on",
+];
+
+/**
+ * Words naming the medium rather than the thing to play. "включи музыку" asks
+ * for music in general and has no title in it; "включи музыку Radiohead" does.
+ */
+const MEDIUM_WORDS = ["музык", "песн", "трек", "music", "song", "track"];
+
+function stripLeading(text: string, words: string[]): string {
+  let result = text;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const word of words) {
+      // Matches the word at the end of the phrase too, so "включи музыку"
+      // strips down to nothing and opens the module instead of searching for
+      // the word "музыку" as if it were a track title.
+      const match = result.match(new RegExp(`^${word}\\S*(\\s+|$)`));
+      if (match) {
+        result = result.slice(match[0].length).trim();
+        changed = true;
+      }
+    }
+  }
+  return result;
+}
+
+function matchPlay(text: string): VoiceIntent | null {
+  const verb = PLAY_VERBS.find((v) => text.startsWith(`${v} `) || text === v);
+  if (!verb) return null;
+
+  // "включи музыку Radiohead" is a request for Radiohead; the word "музыку"
+  // names the medium and is not part of what to search for.
+  const query = stripLeading(text.slice(verb.length).trim(), [...MEDIUM_WORDS, ...SEARCH_FILLER]);
+
+  // Nothing named: fall through so the module opens instead of a blind search.
+  if (query.split(" ").filter(Boolean).length < 1) return null;
+  return { kind: "play", query, label: `play “${query}”` };
+}
+
 function matchSearch(text: string): VoiceIntent | null {
   const verb = SEARCH_VERBS.find((v) => text.startsWith(`${v} `) || text === v);
   if (!verb) return null;
@@ -106,6 +166,11 @@ export function matchIntent(rawTranscript: string): VoiceIntent | null {
   // the user did not ask.
   const search = matchSearch(text);
   if (search) return search;
+
+  // Before module matching, or "включи музыку Radiohead" would open the Music
+  // module and ignore the artist entirely.
+  const play = matchPlay(text);
+  if (play) return play;
 
   // Naming exactly one direction is treated as a rotation, with or without a
   // verb — "rotate left" and a bare "left" mean the same thing out loud. Both
@@ -158,6 +223,8 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
         return "Закрываю";
       case "search":
         return `Ищу: ${intent.query}`;
+      case "play":
+        return `Включаю: ${intent.query}`;
     }
   }
 
@@ -170,5 +237,7 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
       return "Closing";
     case "search":
       return `Searching for ${intent.query}`;
+    case "play":
+      return `Playing ${intent.query}`;
   }
 }

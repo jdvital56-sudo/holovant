@@ -7,6 +7,7 @@ import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes"
 import { matchIntent, replyFor } from "./commandEngine";
 import { speak, stopSpeaking, primeVoices, isSystemSpeaking, type SpeechLang } from "./speech";
 import { runSearch, clearSearch } from "./searchStore";
+import { playTrack } from "./playMusic";
 import { briefingFor, findModule } from "@/modules/briefing";
 import { askAssistant, clearChat } from "./chatStore";
 
@@ -84,6 +85,27 @@ export function useVoiceCommands() {
         store.dispatch({ type: "collapse", source: "voice" });
         clearSearch();
         break;
+      case "play":
+        void playTrack(intent.query).then((status) => {
+          const said =
+            status === "opened"
+              ? lang === "ru"
+                ? `Включаю ${intent.query}`
+                : `Playing ${intent.query}`
+              : status === "notFound"
+                ? lang === "ru"
+                  ? "Не нашёл, что включить"
+                  : "Could not find anything to play"
+                : status === "blocked"
+                  ? lang === "ru"
+                    ? "Браузер заблокировал открытие — нажмите ссылку на экране"
+                    : "The browser blocked opening it — use the link on screen"
+                  : lang === "ru"
+                    ? "Не смог включить"
+                    : "Could not play that";
+          speak(said, lang);
+        });
+        break;
       case "search":
         void runSearch(intent.query).then((results) => {
           // Spoken after the fact, because the answer is the point of a search
@@ -108,7 +130,7 @@ export function useVoiceCommands() {
     // Opening a module and searching each produce their own spoken answer once
     // the data lands. Saying "Opening Instagram" first only gets cut off by it,
     // and "opening" was never the useful half of the reply anyway.
-    if (intent.kind !== "open" && intent.kind !== "search") {
+    if (intent.kind !== "open" && intent.kind !== "search" && intent.kind !== "play") {
       speak(replyFor(intent, lang), lang);
     }
     setLastCommand(intent.label);
