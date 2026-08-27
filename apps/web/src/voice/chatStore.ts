@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { speak, speakQueued } from "./speech";
+import { searchBrain } from "@/modules/brain/brainStore";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -49,6 +50,18 @@ export async function askAssistant(question: string, moduleContext: string | nul
   const requestId = ++activeRequest;
   const history = [...useChatStore.getState().history, { role: "user" as const, content: question }];
 
+  // Notes are looked up before the model is asked, so an answer about the
+  // user's own work is grounded in what they wrote rather than invented. When
+  // no knowledge base is connected this simply finds nothing and the assistant
+  // answers as it did before.
+  const notes = await searchBrain(question).catch(() => []);
+  const knowledge = notes.length
+    ? notes
+        .slice(0, 3)
+        .map((note) => `# ${note.title}\n${note.excerpt}`)
+        .join("\n\n")
+    : null;
+
   useChatStore.setState({
     status: "thinking",
     history: history.slice(-MAX_TURNS),
@@ -60,7 +73,7 @@ export async function askAssistant(question: string, moduleContext: string | nul
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: history, moduleContext, lang }),
+      body: JSON.stringify({ messages: history, moduleContext, lang, knowledge }),
     });
 
     if (response.status === 501) {

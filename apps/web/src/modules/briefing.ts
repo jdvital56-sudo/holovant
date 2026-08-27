@@ -4,6 +4,7 @@ import { loadWeather } from "./weather/weatherStore";
 import { spokenWeather, adviceFor } from "./weather/advice";
 import { runSystemCheck } from "./system/systemStore";
 import { systemAdvice } from "./system/report";
+import { loadBrainStats } from "./brain/brainStore";
 
 /**
  * What a module has to say when it opens.
@@ -16,6 +17,13 @@ export async function briefingFor(
   module: ModuleDefinition,
   lang: AdviceLang,
 ): Promise<ModuleAdvice> {
+  if (module.id === "brain") {
+    // Whether a knowledge base is connected is a fact about right now, and the
+    // one thing this module must never guess at.
+    const stats = await loadBrainStats();
+    return module.toAdvice(stats as never, lang);
+  }
+
   if (module.id === "system") {
     const report = await runSystemCheck();
     return systemAdvice(report, lang);

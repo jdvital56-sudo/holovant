@@ -34,6 +34,7 @@ const MODULE_ALIASES: Record<ModuleId, string[]> = {
   calendar: ["calendar", "schedule", "календар", "расписани"],
   weather: ["weather", "погод"],
   ai: ["ai", "assistant", "ии", "ассистент"],
+  brain: ["brain", "second brain", "мозг", "второй мозг", "заметк", "знани", "база знаний"],
   news: ["news", "новост"],
   music: ["music", "музык"],
   system: ["system", "систем", "диагностик"],

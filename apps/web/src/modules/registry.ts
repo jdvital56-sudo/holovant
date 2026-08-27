@@ -11,6 +11,7 @@ import { sportsModule } from "./sports";
 import { calendarModule } from "./calendar";
 import { weatherModule } from "./weather";
 import { aiModule } from "./ai";
+import { brainModule } from "./brain";
 import { newsModule } from "./news";
 import { musicModule } from "./music";
 import { systemModule } from "./system";
@@ -33,6 +34,7 @@ export const moduleRegistry: ModuleDefinition[] = [
   calendarModule,
   weatherModule,
   aiModule,
+  brainModule,
   newsModule,
   musicModule,
   systemModule,

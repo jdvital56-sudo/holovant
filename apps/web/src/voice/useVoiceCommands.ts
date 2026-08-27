@@ -88,21 +88,19 @@ export function useVoiceCommands() {
       case "play":
         void playTrack(intent.query).then((status) => {
           const said =
-            status === "opened"
+            status === "ready"
               ? lang === "ru"
-                ? `Включаю ${intent.query}`
-                : `Playing ${intent.query}`
+                ? // Says what is true: found and loaded, waiting for the click
+                  // the browser requires before any page may make sound.
+                  `Нашёл. Нажмите play на плеере слева`
+                : `Found it. Press play on the player`
               : status === "notFound"
                 ? lang === "ru"
                   ? "Не нашёл, что включить"
                   : "Could not find anything to play"
-                : status === "blocked"
-                  ? lang === "ru"
-                    ? "Браузер заблокировал открытие — нажмите ссылку на экране"
-                    : "The browser blocked opening it — use the link on screen"
-                  : lang === "ru"
-                    ? "Не смог включить"
-                    : "Could not play that";
+                : lang === "ru"
+                  ? "Не смог включить"
+                  : "Could not play that";
           speak(said, lang);
         });
         break;

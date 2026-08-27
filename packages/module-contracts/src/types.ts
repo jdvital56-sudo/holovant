@@ -11,6 +11,7 @@ export type ModuleId =
   | "calendar"
   | "weather"
   | "ai"
+  | "brain"
   | "news"
   | "music"
   | "system";
