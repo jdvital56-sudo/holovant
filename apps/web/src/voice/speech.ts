@@ -6,6 +6,8 @@
  * wired up, and keeps answering if one never is.
  */
 
+import { meterAudioElement } from "@/audio/voiceLevel";
+
 export type SpeechLang = "ru" | "en";
 
 let cachedVoices: SpeechSynthesisVoice[] = [];
@@ -142,6 +144,8 @@ async function speakOnServer(text: string, sequence: number): Promise<boolean> {
     stopServerVoice();
     const audio = new Audio(URL.createObjectURL(blob));
     audio.volume = 0.95;
+    // Routed through the meter so the face moves to this line, not to a timer.
+    meterAudioElement(audio);
     currentAudio = audio;
     speaking = true;
     audio.onended = markDone;

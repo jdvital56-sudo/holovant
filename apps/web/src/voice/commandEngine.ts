@@ -6,7 +6,8 @@ export type VoiceIntent =
   | { kind: "rotate"; direction: "left" | "right"; label: string }
   | { kind: "close"; label: string }
   | { kind: "search"; query: string; label: string }
-  | { kind: "play"; query: string; label: string };
+  | { kind: "play"; query: string; label: string }
+  | { kind: "showFace"; show: boolean; label: string };
 
 /**
  * Spoken names per module, in both languages the founder tests in. Recognisers
@@ -132,6 +133,27 @@ function matchPlay(text: string): VoiceIntent | null {
   return { kind: "play", query, label: `play “${query}”` };
 }
 
+/**
+ * Asking the assistant to appear. Matched on the verb plus a word for itself,
+ * so "покажи лицо" is distinguished from "покажи погоду" — one is a request to
+ * be seen, the other to open a module.
+ */
+const FACE_SUBJECTS = ["лицо", "себя", "face", "yourself"];
+const HIDE_VERBS = ["скрой", "спрячь", "убери", "hide"];
+
+function matchFace(text: string): VoiceIntent | null {
+  const namesItself = FACE_SUBJECTS.some((w) => text.includes(w));
+  if (!namesItself) return null;
+
+  if (HIDE_VERBS.some((v) => text.includes(v))) {
+    return { kind: "showFace", show: false, label: "hide face" };
+  }
+  const asksToShow =
+    containsAny(text, OPEN_VERBS) || text.includes("show") || text.includes("appear");
+  if (!asksToShow) return null;
+  return { kind: "showFace", show: true, label: "show face" };
+}
+
 function matchSearch(text: string): VoiceIntent | null {
   const verb = SEARCH_VERBS.find((v) => text.startsWith(`${v} `) || text === v);
   if (!verb) return null;
@@ -165,6 +187,11 @@ export function matchIntent(rawTranscript: string): VoiceIntent | null {
   // Search is matched first and wins outright: "find some music" names a module
   // as its subject, and treating that as "open Music" would answer a question
   // the user did not ask.
+  // Checked first: "покажи себя" contains an open verb and would otherwise
+  // be read as a request to open a module.
+  const face = matchFace(text);
+  if (face) return face;
+
   const search = matchSearch(text);
   if (search) return search;
 
@@ -226,6 +253,8 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
         return `Ищу: ${intent.query}`;
       case "play":
         return `Включаю: ${intent.query}`;
+      case "showFace":
+        return intent.show ? "Я здесь" : "Скрываюсь";
     }
   }
 
@@ -240,5 +269,7 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
       return `Searching for ${intent.query}`;
     case "play":
       return `Playing ${intent.query}`;
+    case "showFace":
+      return intent.show ? "I am here" : "Hiding";
   }
 }

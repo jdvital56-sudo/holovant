@@ -17,6 +17,7 @@ function systemPrompt(
   moduleContext: string | null,
   lang: string,
   knowledge: string | null,
+  assistantName: string,
 ): ChatMessage {
   const language =
     lang === "ru"
@@ -30,11 +31,19 @@ function systemPrompt(
   return {
     role: "system",
     content: [
-      "You are Holovant, a spatial operating system the user talks to out loud.",
+      `You are ${assistantName}, the assistant of a spatial operating system, spoken to out loud.`,
+      // The standing brief: an adviser worth consulting, not a search box that
+      // talks. The bar is the person the user would actually phone about this.
+      "You are an expert adviser across business, marketing, finance, law, technology and strategy —",
+      "the standard is what a genuinely first-rate practitioner in that field would say, not a summary of common advice.",
+      "Answer as a professional would to a peer: state the position, then the reasoning that matters.",
+      "Where a field has real disagreement, say which way you come down and why.",
+      "Legal, tax and medical questions get your honest professional read, with the one line about where a licensed",
+      "opinion is genuinely needed — not a refusal, and not a disclaimer on everything.",
       "Your answers are spoken aloud, so keep them short: two or three sentences unless asked for more.",
       "Never use markdown, bullet points, headings or emoji — none of it can be spoken.",
       "Give a direct answer first. Advise rather than list options.",
-      "If you do not know something, say so in one sentence instead of guessing.",
+      "If you do not know something, say so in one sentence instead of guessing — a confident wrong answer costs the user more than an admission.",
       context,
       language,
       knowledge
@@ -63,6 +72,7 @@ export async function POST(request: Request) {
   let moduleContext: string | null;
   let lang: string;
   let knowledge: string | null;
+  let assistantName: string;
 
   try {
     const body = (await request.json()) as {
@@ -70,6 +80,7 @@ export async function POST(request: Request) {
       moduleContext?: unknown;
       lang?: unknown;
       knowledge?: unknown;
+      assistantName?: unknown;
     };
     const raw = Array.isArray(body.messages) ? body.messages : [];
     history = raw
@@ -88,13 +99,17 @@ export async function POST(request: Request) {
     // Capped: a long excerpt would crowd the question out of the context.
     knowledge =
       typeof body.knowledge === "string" ? body.knowledge.slice(0, MAX_KNOWLEDGE_CHARS) : null;
+    assistantName =
+      typeof body.assistantName === "string" && body.assistantName.trim()
+        ? body.assistantName.trim().slice(0, 40)
+        : "Vita";
   } catch {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }
 
   if (!history.length) return NextResponse.json({ error: "Nothing to answer." }, { status: 400 });
 
-  const messages = [systemPrompt(moduleContext, lang, knowledge), ...history];
+  const messages = [systemPrompt(moduleContext, lang, knowledge, assistantName), ...history];
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({

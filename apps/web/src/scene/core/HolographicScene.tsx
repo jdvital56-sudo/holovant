@@ -6,6 +6,7 @@ import { QualityGovernor } from "@/quality/QualityGovernor";
 import { ParticleField } from "./ParticleField";
 import { CameraRig } from "./CameraRig";
 import { PostEffects } from "./PostEffects";
+import { VitaFace } from "@/scene/vita/VitaFace";
 
 /**
  * Everything that touches Three.js lives behind this component, which is
@@ -24,6 +25,7 @@ export function HolographicScene() {
       <CameraRig />
       <ParticleField />
       <OrbitController />
+      <VitaFace />
       <PostEffects />
     </Canvas>
   );

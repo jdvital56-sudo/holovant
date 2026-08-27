@@ -8,6 +8,7 @@ import { matchIntent, replyFor } from "./commandEngine";
 import { speak, stopSpeaking, primeVoices, isSystemSpeaking, type SpeechLang } from "./speech";
 import { runSearch, clearSearch } from "./searchStore";
 import { playTrack } from "./playMusic";
+import { showVita, hideVita } from "@/stores/vitaStore";
 import { briefingFor, findModule } from "@/modules/briefing";
 import { askAssistant, clearChat } from "./chatStore";
 
@@ -84,6 +85,10 @@ export function useVoiceCommands() {
       case "close":
         store.dispatch({ type: "collapse", source: "voice" });
         clearSearch();
+        break;
+      case "showFace":
+        if (intent.show) showVita();
+        else hideVita();
         break;
       case "play":
         void playTrack(intent.query).then((status) => {

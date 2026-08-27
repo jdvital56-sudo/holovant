@@ -8,3 +8,4 @@ dist/
 .DS_Store
 .pnpm-store/
 coverage/
+graphify-out/

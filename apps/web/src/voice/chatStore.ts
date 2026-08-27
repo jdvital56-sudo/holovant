@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { speak, speakQueued } from "./speech";
 import { searchBrain } from "@/modules/brain/brainStore";
+import { ASSISTANT_NAME } from "@/config/assistant";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -73,7 +74,13 @@ export async function askAssistant(question: string, moduleContext: string | nul
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: history, moduleContext, lang, knowledge }),
+      body: JSON.stringify({
+        messages: history,
+        moduleContext,
+        lang,
+        knowledge,
+        assistantName: ASSISTANT_NAME,
+      }),
     });
 
     if (response.status === 501) {
