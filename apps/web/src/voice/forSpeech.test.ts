@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { forSpeech, forVoice } from "./speech";
+import { forSpeech, forVoice } from "./speechText";
 
 /**
  * The synthesiser reads punctuation by name — "звёздочка", "тире", "решётка".
@@ -85,5 +85,37 @@ describe("forVoice — numbers said as a person says them", () => {
 
   it("still strips markdown", () => {
     expect(forVoice("**курс** 44.48")).toBe("курс 44 и 48");
+  });
+});
+
+/**
+ * Slashes and signs are shorthand on a screen and the name of a mark out loud.
+ * These strings are ones the System and Weather modules actually speak.
+ */
+describe("forVoice — signs the synthesiser would name", () => {
+  it("says units, not the slash", () => {
+    expect(forVoice("ветер 8 км/ч")).toBe("ветер 8 километров в час");
+    expect(forVoice("Сеть 4g, 10 Мбит/с")).toBe("Сеть 4g, 10 мегабит в секунду");
+  });
+
+  it("says a screen size as a dimension", () => {
+    expect(forVoice("экран 1920×1080")).toBe("экран 1920 на 1080");
+  });
+
+  it("resolves a bare slash rather than naming it", () => {
+    expect(forVoice("чёрный/белый")).toBe("чёрный или белый");
+    expect(forVoice("работаем 24/7")).toBe("работаем круглосуточно");
+  });
+
+  it("says an ampersand as a word", () => {
+    expect(forVoice("Tom & Jerry")).toBe("Tom и Jerry");
+  });
+
+  it("does not read a web address aloud", () => {
+    expect(forVoice("подробности на https://example.com/page тут")).toBe("подробности на тут");
+  });
+
+  it("leaves text without signs alone", () => {
+    expect(forVoice("Открываю Instagram")).toBe("Открываю Instagram");
   });
 });
