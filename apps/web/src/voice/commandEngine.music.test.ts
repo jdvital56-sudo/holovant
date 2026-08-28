@@ -20,9 +20,16 @@ describe("asking for music by voice", () => {
     });
   });
 
-  it("still opens the module when no title is given", () => {
-    // "включи музыку" alone names no track, so there is nothing to play.
-    expect(matchIntent("включи музыку")).toMatchObject({ kind: "open", moduleId: "music" });
+  it("plays a default stream when no title is given", () => {
+    // "включи музыку" names no track — it still has to produce sound, so it
+    // plays the default stream rather than silently opening a module.
+    expect(matchIntent("включи музыку")).toMatchObject({ kind: "play", query: "" });
+    expect(matchIntent("поставь музыку")).toMatchObject({ kind: "play", query: "" });
+  });
+
+  it("still opens the module on an open verb", () => {
+    // "открой музыку" is not a request to play — it opens the module.
+    expect(matchIntent("открой музыку")).toMatchObject({ kind: "open", moduleId: "music" });
   });
 });
 

@@ -9,6 +9,7 @@ import type {
   ModuleMetric,
 } from "@holovant/module-contracts";
 import { useOrbitStore } from "@/stores/orbitStore";
+import { useVitaStore } from "@/stores/vitaStore";
 import { moduleRegistry } from "@/modules/registry";
 import { briefingFor } from "@/modules/briefing";
 import { selectAccount, useSelectedAccount } from "@/modules/accountStore";
@@ -97,6 +98,7 @@ export function ModulePanel() {
   const activeModule = moduleRegistry.find((m) => m.id === expandedId);
   const selectedAccountId = useSelectedAccount(activeModule?.id ?? "instagram");
   const { metrics, tips, accounts } = useModuleContent(activeModule, selectedAccountId);
+  const vitaVisible = useVitaStore((s) => s.visible);
 
   useEffect(() => {
     if (!expandedId) return;
@@ -109,7 +111,7 @@ export function ModulePanel() {
 
   return (
     <AnimatePresence>
-      {activeModule && (
+      {activeModule && !vitaVisible && (
         <motion.div
           key={activeModule.id}
           initial={{ opacity: 0, y: 18, scale: 0.97 }}

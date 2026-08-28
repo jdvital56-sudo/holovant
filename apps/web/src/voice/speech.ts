@@ -7,8 +7,39 @@
  */
 
 import { meterAudioElement } from "@/audio/voiceLevel";
+import { getVolume } from "@/audio/volumeStore";
 
 export type SpeechLang = "ru" | "en";
+
+/**
+ * Strips formatting a synthesiser would read out as the names of punctuation.
+ * The model answers in Markdown — "**bold**", "- point", "— aside", "### head"
+ * — and both Piper and the browser voice will literally say "звёздочка",
+ * "тире", "решётка" for those. This keeps the words and drops the marks.
+ */
+export function forSpeech(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, " ") // fenced code
+    .replace(/`([^`]+)`/g, "$1") // inline code
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ") // images
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1") // links -> their text
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "") // headings
+    .replace(/^\s{0,3}>\s?/gm, "") // block quotes
+    .replace(/^\s{0,3}[-*+•·—–]\s+/gm, "") // bullet markers
+    .replace(/^\s{0,3}\d+[.)]\s+/gm, "") // numbered list markers
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // bold
+    .replace(/\*([^*]+)\*/g, "$1") // italic *
+    .replace(/(^|[\s(])_([^_]+)_(?=[\s).,!?:;]|$)/g, "$1$2") // italic _
+    .replace(/[*_`#|~]/g, " ") // any leftover markup character
+    .replace(/\s*[—–]\s*/g, ", ") // dash used as an aside -> a pause
+    .replace(/\s+-\s+/g, ", ") // hyphen used the same way
+    .replace(/\.{2,}/g, "…") // "..." read as three separate stops
+    .replace(/,\s*,/g, ",")
+    .replace(/\s+([,.!?;:…])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
 
 let cachedVoices: SpeechSynthesisVoice[] = [];
 
@@ -94,6 +125,16 @@ export function isSystemSpeaking() {
   return speaking;
 }
 
+/**
+ * The last line handed to the voice, lowercased. The microphone picks up the
+ * reply while it plays; comparing against this is how the caller tells the
+ * assistant's own echo from the user actually talking over it.
+ */
+let lastSpoken = "";
+export function spokenText() {
+  return lastSpoken;
+}
+
 function markDone() {
   if (settleTimer) clearTimeout(settleTimer);
   settleTimer = setTimeout(() => {
@@ -143,7 +184,7 @@ async function speakOnServer(text: string, sequence: number): Promise<boolean> {
 
     stopServerVoice();
     const audio = new Audio(URL.createObjectURL(blob));
-    audio.volume = 0.95;
+    audio.volume = getVolume();
     // Routed through the meter so the face moves to this line, not to a timer.
     meterAudioElement(audio);
     currentAudio = audio;
@@ -166,7 +207,8 @@ async function speakOnServer(text: string, sequence: number): Promise<boolean> {
  * the product still talks on a deployment with no speech service behind it.
  */
 export function speak(text: string, lang: SpeechLang = "ru") {
-  if (!text) return;
+  const clean = forSpeech(text ?? "");
+  if (!clean) return;
   queue.length = 0;
   const sequence = ++speechSequence;
   stopServerVoice();
@@ -174,7 +216,7 @@ export function speak(text: string, lang: SpeechLang = "ru") {
   // Held from the moment the line is requested, not from when audio starts, so
   // the microphone cannot pick up the reply during synthesis either.
   speaking = true;
-  void deliver(text, lang, sequence);
+  void deliver(clean, lang, sequence);
 }
 
 const queue: Array<{ text: string; lang: SpeechLang }> = [];
@@ -188,7 +230,7 @@ let draining = false;
  * behaviour for one-off confirmations, which is what `speak` is for.
  */
 export function speakQueued(text: string, lang: SpeechLang = "ru") {
-  const trimmed = text.trim();
+  const trimmed = forSpeech(text ?? "");
   if (!trimmed) return;
   queue.push({ text: trimmed, lang });
   speaking = true;
@@ -218,6 +260,7 @@ async function drain() {
 
 /** Speaks one line and resolves when its audio has finished, not when it starts. */
 async function deliver(text: string, lang: SpeechLang, sequence: number): Promise<void> {
+  lastSpoken = text.toLowerCase();
   const playedOnServer = await speakOnServer(text, sequence);
   if (sequence !== speechSequence) return;
   if (playedOnServer) {
@@ -264,10 +307,9 @@ function buildUtterance(text: string, lang: SpeechLang) {
   if (voice) utterance.voice = voice;
   utterance.lang = lang === "ru" ? "ru-RU" : "en-US";
   utterance.rate = 1.02;
-  // Slightly under neutral: reinforces the male voice, and keeps it under the
-  // synthesiser's brighter default when only a generic voice is installed.
-  utterance.pitch = 0.85;
-  utterance.volume = 0.9;
+  // Just under neutral — enough to lean male without sounding sunk.
+  utterance.pitch = 0.95;
+  utterance.volume = getVolume();
 
   // Held so the recogniser does not hear the reply and act on it — "Opening
   // Instagram" contains the very word that opens Instagram.
@@ -279,6 +321,7 @@ function buildUtterance(text: string, lang: SpeechLang) {
 export function stopSpeaking() {
   speechSequence++;
   queue.length = 0;
+  lastSpoken = "";
   stopServerVoice();
   if (!isSpeechSynthesisAvailable()) {
     speaking = false;

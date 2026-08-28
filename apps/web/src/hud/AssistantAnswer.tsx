@@ -2,6 +2,8 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useChatStore } from "@/voice/chatStore";
+import { forSpeech } from "@/voice/speech";
+import { useVitaStore } from "@/stores/vitaStore";
 
 /**
  * The assistant's answer, on screen while it is also being spoken.
@@ -14,9 +16,15 @@ export function AssistantAnswer() {
   const partial = useChatStore((s) => s.partial);
   const history = useChatStore((s) => s.history);
   const errorMessage = useChatStore((s) => s.errorMessage);
+  const vitaVisible = useVitaStore((s) => s.visible);
+
+  // While Vita's face is up the screen is just the face on black — no panels.
+  if (vitaVisible) return null;
 
   const lastAnswer = [...history].reverse().find((turn) => turn.role === "assistant");
-  const shown = partial || (status === "idle" ? lastAnswer?.content : "") || "";
+  // Strip markdown the model emits despite being told not to — the same clean
+  // that the spoken side gets, so the panel never shows a raw "**".
+  const shown = forSpeech(partial || (status === "idle" ? lastAnswer?.content ?? "" : "") || "");
   const visible = status === "thinking" || status === "streaming" || status === "error" || Boolean(shown);
 
   return (

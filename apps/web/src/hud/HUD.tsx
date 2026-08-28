@@ -8,6 +8,8 @@ import { useAudioStore, toggleAudio } from "@/audio/audioStore";
 import { useInteractionSounds } from "@/audio/useInteractionSounds";
 import { useVoiceCommands } from "@/voice/useVoiceCommands";
 import { useVoiceStore } from "@/voice/voiceStore";
+import { useVitaStore, hideVita } from "@/stores/vitaStore";
+import { ASSISTANT_NAME } from "@/config/assistant";
 import { useCardStyleStore, cycleCardStyle, CARD_STYLE_LABEL } from "@/stores/cardStyleStore";
 import { warmUpServerVoice } from "@/voice/speech";
 import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
@@ -62,6 +64,7 @@ export function HUD() {
   const transcript = useVoiceStore((s) => s.transcript);
   const lastCommand = useVoiceStore((s) => s.lastCommand);
   const voiceError = useVoiceStore((s) => s.errorMessage);
+  const vitaVisible = useVitaStore((s) => s.visible);
   const cardStyle = useCardStyleStore((s) => s.style);
   useInteractionSounds();
 
@@ -70,6 +73,24 @@ export function HUD() {
   useEffect(() => {
     warmUpServerVoice();
   }, []);
+
+  // While Vita's face is up the screen is just the face on black — the whole
+  // dashboard HUD is gone, leaving only the one hint for getting back.
+  if (vitaVisible) {
+    return (
+      <div className="fixed inset-x-0 bottom-8 z-20 flex justify-center font-mono">
+        <button
+          type="button"
+          onClick={hideVita}
+          className="pointer-events-auto flex items-center gap-2 rounded-full border border-signal/40 bg-[rgba(16,24,38,0.7)] px-4 py-1.5 backdrop-blur-md transition-colors hover:border-signal"
+        >
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal shadow-[0_0_8px_rgba(111,179,255,0.7)]" />
+          <span className="text-[11px] uppercase tracking-[0.2em] text-frost">{ASSISTANT_NAME}</span>
+          <span className="text-[10px] text-mist/60">say “скрой лицо”</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     // translate="no" keeps browser translators from replacing these text

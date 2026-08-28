@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePlayStore, clearPlayback } from "@/voice/playMusic";
+import { useFavoritesStore, addFavorite, removeFavorite } from "@/voice/favoritesStore";
+import { useVolumeStore } from "@/audio/volumeStore";
 
 /**
  * The found track, playable inside Holovant.
@@ -18,6 +21,35 @@ export function NowPlaying() {
   const title = usePlayStore((s) => s.title);
   const url = usePlayStore((s) => s.url);
   const videoId = usePlayStore((s) => s.videoId);
+  const saved = useFavoritesStore((s) => (videoId ? s.tracks.some((t) => t.videoId === videoId) : false));
+  const volume = useVolumeStore((s) => s.level);
+  const frameRef = useRef<HTMLIFrameElement>(null);
+
+  // "Сделай громче / тише" moves the shared volume; pass it to the embedded
+  // player through the YouTube iframe API. Best-effort — it needs the player
+  // to have finished loading, so it is also re-sent whenever the frame loads.
+  useEffect(() => {
+    const win = frameRef.current?.contentWindow;
+    if (!win) return;
+    const send = (func: string, args: unknown[]) =>
+      win.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+    send("setVolume", [Math.round(volume * 100)]);
+    if (volume <= 0.001) send("mute", []);
+    else send("unMute", []);
+  }, [volume, videoId]);
+
+  // Belt and braces: when the track changes or the panel closes, tell the old
+  // player to stop as well as unmounting it. An iframe that keeps playing after
+  // "выключи музыку" is exactly the broken promise to avoid.
+  useEffect(() => {
+    const frame = frameRef.current;
+    return () => {
+      frame?.contentWindow?.postMessage(
+        JSON.stringify({ event: "command", func: "stopVideo", args: [] }),
+        "*",
+      );
+    };
+  }, [videoId]);
 
   if (status === "idle") return null;
 
@@ -34,13 +66,31 @@ export function NowPlaying() {
           <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-mist">
             {status === "finding" ? "finding" : status === "ready" ? "press play" : "music"}
           </div>
-          <button
-            type="button"
-            onClick={clearPlayback}
-            className="shrink-0 cursor-pointer font-mono text-[11px] text-mist transition-colors hover:text-frost"
-          >
-            CLOSE
-          </button>
+          <div className="flex shrink-0 items-center gap-3">
+            {videoId && (
+              <button
+                type="button"
+                onClick={() =>
+                  saved
+                    ? removeFavorite(videoId)
+                    : addFavorite({ videoId, title: title ?? "Track", url: url ?? "" })
+                }
+                title={saved ? "remove from favorites" : "save to favorites"}
+                className={`cursor-pointer font-mono text-[11px] transition-colors ${
+                  saved ? "text-signal" : "text-mist hover:text-frost"
+                }`}
+              >
+                {saved ? "★ SAVED" : "☆ SAVE"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={clearPlayback}
+              className="cursor-pointer font-mono text-[11px] text-mist transition-colors hover:text-frost"
+            >
+              CLOSE
+            </button>
+          </div>
         </div>
 
         {status === "finding" && (
@@ -63,11 +113,28 @@ export function NowPlaying() {
             <div className="aspect-video w-full bg-black">
               <iframe
                 key={videoId}
-                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+                ref={frameRef}
+                // autoplay=1 starts it without the click where Chrome's media
+                // engagement allows; where it does not, the player is right
+                // here and the "press play" label says so. enablejsapi lets
+                // "сделай громче / тише" reach it.
+                src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&enablejsapi=1`}
                 title={title ?? "Track"}
                 className="h-full w-full"
-                allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
+                allow="autoplay; accelerometer; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
+                onLoad={() => {
+                  const win = frameRef.current?.contentWindow;
+                  if (!win) return;
+                  win.postMessage(
+                    JSON.stringify({
+                      event: "command",
+                      func: "setVolume",
+                      args: [Math.round(useVolumeStore.getState().level * 100)],
+                    }),
+                    "*",
+                  );
+                }}
               />
             </div>
             <div className="px-4 pb-3 pt-2">

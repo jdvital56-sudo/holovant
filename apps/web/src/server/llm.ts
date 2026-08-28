@@ -53,7 +53,9 @@ export async function* streamChat(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model, messages, stream: true, temperature: 0.6, max_tokens: 700 }),
+    // Low temperature and a tight ceiling: answers are spoken aloud and should
+    // be two or three sentences, not an essay that wanders.
+    body: JSON.stringify({ model, messages, stream: true, temperature: 0.4, max_tokens: 320 }),
     signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 

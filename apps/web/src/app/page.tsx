@@ -4,11 +4,13 @@ import { ModulePanel } from "@/hud/ModulePanel";
 import { SearchResults } from "@/hud/SearchResults";
 import { AssistantAnswer } from "@/hud/AssistantAnswer";
 import { NowPlaying } from "@/hud/NowPlaying";
+import { VitaFaceVideo } from "@/hud/VitaFaceVideo";
 
 export default function Home() {
   return (
     <main className="relative w-screen h-screen bg-void overflow-hidden">
       <SceneRoot />
+      <VitaFaceVideo />
       <HUD />
       <ModulePanel />
       <SearchResults />

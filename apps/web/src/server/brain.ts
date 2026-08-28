@@ -24,7 +24,28 @@ const MAX_NOTES_SCANNED = 3000;
 const EXCERPT_CHARS = 320;
 
 /** Folders that hold configuration and history rather than knowledge. */
-const SKIP_DIRECTORIES = new Set([".obsidian", ".git", ".trash", "node_modules", ".smart-env"]);
+const SKIP_DIRECTORIES = new Set([
+  ".obsidian",
+  ".git",
+  ".trash",
+  "node_modules",
+  ".smart-env",
+  "agent-memory",
+  ".claude",
+]);
+
+/**
+ * An AI assistant's own working notes carry this front matter. They are not the
+ * user's knowledge and must never be read back to the user as advice.
+ */
+function isAgentMemory(raw: string): boolean {
+  const front = raw.match(/^---\n([\s\S]*?)\n---/);
+  if (!front) return false;
+  return (
+    /node_type:\s*memory/.test(front[1]) ||
+    /\btype:\s*(user|feedback|project|reference)\b/.test(front[1])
+  );
+}
 
 export function brainRoot(): string | null {
   const configured = process.env.HOLOVANT_BRAIN_PATH?.trim();
@@ -136,6 +157,7 @@ export async function searchBrain(query: string, limit = 5): Promise<BrainNote[]
       const info = await stat(file);
       if (info.size > MAX_FILE_BYTES) continue;
       const raw = await readFile(file, "utf-8");
+      if (isAgentMemory(raw)) continue;
       const text = toPlainText(raw);
       const title = titleFrom(raw, file);
       const score = scoreNote(title, text, terms);

@@ -1,5 +1,6 @@
 import type { ModuleId } from "@holovant/module-contracts";
 import { moduleRegistry } from "@/modules/registry";
+import { assistantAliases } from "@/config/assistant";
 
 export type VoiceIntent =
   | { kind: "open"; moduleId: ModuleId; label: string }
@@ -7,7 +8,12 @@ export type VoiceIntent =
   | { kind: "close"; label: string }
   | { kind: "search"; query: string; label: string }
   | { kind: "play"; query: string; label: string }
-  | { kind: "showFace"; show: boolean; label: string };
+  | { kind: "favoriteAdd"; label: string }
+  | { kind: "favoritePlay"; label: string }
+  | { kind: "showFace"; show: boolean; label: string }
+  | { kind: "wake"; label: string }
+  | { kind: "volume"; direction: "up" | "down"; label: string }
+  | { kind: "dismiss"; target: "chat" | "player" | "all"; label: string };
 
 /**
  * Spoken names per module, in both languages the founder tests in. Recognisers
@@ -126,11 +132,58 @@ function matchPlay(text: string): VoiceIntent | null {
 
   // "включи музыку Radiohead" is a request for Radiohead; the word "музыку"
   // names the medium and is not part of what to search for.
-  const query = stripLeading(text.slice(verb.length).trim(), [...MEDIUM_WORDS, ...SEARCH_FILLER]);
+  const rest = text.slice(verb.length).trim();
+  const query = stripLeading(rest, [...MEDIUM_WORDS, ...SEARCH_FILLER]);
 
-  // Nothing named: fall through so the module opens instead of a blind search.
-  if (query.split(" ").filter(Boolean).length < 1) return null;
+  if (query.split(" ").filter(Boolean).length < 1) {
+    // "включи музыку" with no title. If a medium word was actually said, play
+    // a default stream — "play music" that plays nothing is a broken promise.
+    // A bare "включи" with no medium still falls through to module matching.
+    if (MEDIUM_WORDS.some((w) => rest.includes(w))) {
+      return { kind: "play", query: "", label: "play music" };
+    }
+    return null;
+  }
   return { kind: "play", query, label: `play “${query}”` };
+}
+
+/** Verbs that ask for a track to be saved, or the collection to be named. */
+const REMEMBER_VERBS = ["запомни", "запиши", "сохрани", "добавь", "remember", "save"];
+const FORGET_VERBS = ["убери", "удали", "забудь", "remove", "delete"];
+const FAVORITE_WORDS = [
+  "избранн",
+  "favorite",
+  "favourite",
+  "сборник",
+  "подборк",
+  "плейлист",
+  "playlist",
+];
+
+/**
+ * "Запомни этот трек" saves whatever is playing; "включи избранное" plays the
+ * saved collection back. Checked before the play matcher so "включи мою музыку"
+ * reaches the collection instead of the default stream.
+ */
+function matchFavorites(text: string): VoiceIntent | null {
+  const namesFavorites =
+    containsAny(text, FAVORITE_WORDS) ||
+    /(^|\s)мо[йяю]\s+(музык|песн|трек|подборк|сборник)/.test(text) ||
+    /(^|\s)мои\s+(трек|песн|любим)/.test(text) ||
+    /\bmy\s+(music|tracks?|songs?|playlist|mix|favou?rites?)\b/.test(text);
+
+  const namesThis =
+    containsAny(text, MEDIUM_WORDS) || /(^|\s)(это|этот|эту)(\s|$)/.test(text) || /\bthis\b/.test(text);
+
+  if (containsAny(text, REMEMBER_VERBS) && (namesFavorites || namesThis)) {
+    return { kind: "favoriteAdd", label: "save track" };
+  }
+
+  if (!namesFavorites) return null;
+  // "убери из избранного" is a removal, not a request to play it. Removal by
+  // voice is not built yet, so leave it alone rather than playing instead.
+  if (containsAny(text, FORGET_VERBS)) return null;
+  return { kind: "favoritePlay", label: "play favorites" };
 }
 
 /**
@@ -139,7 +192,20 @@ function matchPlay(text: string): VoiceIntent | null {
  * be seen, the other to open a module.
  */
 const FACE_SUBJECTS = ["лицо", "себя", "face", "yourself"];
-const HIDE_VERBS = ["скрой", "спрячь", "убери", "hide"];
+const HIDE_VERBS = [
+  "скрой",
+  "спрячь",
+  "убери",
+  "убрать",
+  // "закрой лицо" and "выключи лицо" are the same request. Without these they
+  // fell through to the generic close verb and did nothing to the face at all.
+  "закрой",
+  "закрыть",
+  "выключи",
+  "выруби",
+  "hide",
+  "close",
+];
 
 function matchFace(text: string): VoiceIntent | null {
   const namesItself = FACE_SUBJECTS.some((w) => text.includes(w));
@@ -152,6 +218,59 @@ function matchFace(text: string): VoiceIntent | null {
     containsAny(text, OPEN_VERBS) || text.includes("show") || text.includes("appear");
   if (!asksToShow) return null;
   return { kind: "showFace", show: true, label: "show face" };
+}
+
+/**
+ * Just the assistant's name, or the name with a word or two after it — a call
+ * for attention. "Вита" alone should get "Да, сэр", not be sent to the model.
+ */
+function matchWake(text: string): VoiceIntent | null {
+  const words = text.split(" ").filter(Boolean);
+  if (!words.length || words.length > 3) return null;
+  const aliases = assistantAliases();
+  if (!aliases.includes(words[0])) return null;
+  // "вита покажи лицо" is a command with a name in front — let it fall through.
+  const rest = words.slice(1).join(" ");
+  if (!rest || ["ты тут", "ты здесь", "you there", "here"].includes(rest)) {
+    return { kind: "wake", label: "wake" };
+  }
+  return null;
+}
+
+const LOUDER_WORDS = ["громче", "погромче", "прибавь", "louder", "volume up"];
+const QUIETER_WORDS = ["тише", "потише", "убавь", "quieter", "softer", "volume down"];
+
+function matchVolume(text: string): VoiceIntent | null {
+  if (containsAny(text, LOUDER_WORDS)) return { kind: "volume", direction: "up", label: "louder" };
+  if (containsAny(text, QUIETER_WORDS)) return { kind: "volume", direction: "down", label: "quieter" };
+  return null;
+}
+
+/** "Убери чат", "закрой плеер", "убери всё" — clearing what is on screen. */
+function matchDismiss(text: string): VoiceIntent | null {
+  const clears = containsAny(text, [
+    "убери",
+    "убрать",
+    "закрой",
+    "закрыть",
+    "скрой",
+    "выключи",
+    "выруби",
+    "останови",
+    "заглуши",
+    "пауза",
+    "clear",
+    "close",
+    "hide",
+    "pause",
+  ]);
+  if (!clears) return null;
+  if (/чат|ответ|chat|answer/.test(text)) return { kind: "dismiss", target: "chat", label: "dismiss chat" };
+  if (/плеер|player|музык|music|трек|track/.test(text))
+    return { kind: "dismiss", target: "player", label: "dismiss player" };
+  if (/(^|\s)вс[её](\s|$)|everything|\ball\b/.test(text))
+    return { kind: "dismiss", target: "all", label: "dismiss all" };
+  return null;
 }
 
 function matchSearch(text: string): VoiceIntent | null {
@@ -181,19 +300,38 @@ function matchSearch(text: string): VoiceIntent | null {
  * moves the interface under the user for no reason.
  */
 export function matchIntent(rawTranscript: string): VoiceIntent | null {
-  const text = normalise(rawTranscript);
+  let text = normalise(rawTranscript);
   if (!text) return null;
 
-  // Search is matched first and wins outright: "find some music" names a module
-  // as its subject, and treating that as "open Music" would answer a question
-  // the user did not ask.
+  // Just the name on its own — a call for attention, answered directly.
+  const wake = matchWake(text);
+  if (wake) return wake;
+
+  // The name in front of a command is only addressing ("Вита, включи музыку").
+  // Strip it so the rest matches as if it had been said alone.
+  const words = text.split(" ");
+  if (words.length > 1 && assistantAliases().includes(words[0])) {
+    text = words.slice(1).join(" ");
+  }
+
   // Checked first: "покажи себя" contains an open verb and would otherwise
   // be read as a request to open a module.
   const face = matchFace(text);
   if (face) return face;
 
+  const dismiss = matchDismiss(text);
+  if (dismiss) return dismiss;
+
+  const volume = matchVolume(text);
+  if (volume) return volume;
+
   const search = matchSearch(text);
   if (search) return search;
+
+  // Before the play matcher: "включи мою музыку" is the saved collection, not
+  // a request for the default stream.
+  const favorites = matchFavorites(text);
+  if (favorites) return favorites;
 
   // Before module matching, or "включи музыку Radiohead" would open the Music
   // module and ignore the artist entirely.
@@ -252,9 +390,19 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
       case "search":
         return `Ищу: ${intent.query}`;
       case "play":
-        return `Включаю: ${intent.query}`;
+        return intent.query ? `Включаю: ${intent.query}` : "Включаю музыку";
+      // Spoken by the caller, which knows the track title and the new count.
+      case "favoriteAdd":
+      case "favoritePlay":
+        return "";
       case "showFace":
         return intent.show ? "Я здесь" : "Скрываюсь";
+      case "wake":
+        return "Да, сэр";
+      case "volume":
+        return intent.direction === "up" ? "Громче" : "Тише";
+      case "dismiss":
+        return "";
     }
   }
 
@@ -268,8 +416,17 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
     case "search":
       return `Searching for ${intent.query}`;
     case "play":
-      return `Playing ${intent.query}`;
+      return intent.query ? `Playing ${intent.query}` : "Playing music";
+    case "favoriteAdd":
+    case "favoritePlay":
+      return "";
     case "showFace":
       return intent.show ? "I am here" : "Hiding";
+    case "wake":
+      return "Yes, sir";
+    case "volume":
+      return intent.direction === "up" ? "Louder" : "Quieter";
+    case "dismiss":
+      return "";
   }
 }

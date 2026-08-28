@@ -1,6 +1,7 @@
 "use client";
 
 import { useSearchStore, clearSearch } from "@/voice/searchStore";
+import { useVitaStore } from "@/stores/vitaStore";
 
 /**
  * Web results, opened by voice. Rendered as an overlay panel rather than in the
@@ -12,8 +13,9 @@ export function SearchResults() {
   const query = useSearchStore((s) => s.query);
   const results = useSearchStore((s) => s.results);
   const errorMessage = useSearchStore((s) => s.errorMessage);
+  const vitaVisible = useVitaStore((s) => s.visible);
 
-  if (status === "idle") return null;
+  if (vitaVisible || status === "idle") return null;
 
   return (
     <div

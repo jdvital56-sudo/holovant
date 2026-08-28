@@ -3,10 +3,10 @@
 import { Canvas } from "@react-three/fiber";
 import { OrbitController } from "@/scene/orbit/OrbitController";
 import { QualityGovernor } from "@/quality/QualityGovernor";
+import { useVitaStore } from "@/stores/vitaStore";
 import { ParticleField } from "./ParticleField";
 import { CameraRig } from "./CameraRig";
 import { PostEffects } from "./PostEffects";
-import { VitaFace } from "@/scene/vita/VitaFace";
 
 /**
  * Everything that touches Three.js lives behind this component, which is
@@ -14,8 +14,16 @@ import { VitaFace } from "@/scene/vita/VitaFace";
  * renderer just to be shown a fallback list.
  */
 export function HolographicScene() {
+  // While Vita's face is up the scene is hidden behind black. Stop rendering it
+  // entirely — a slow GPU cannot run the full scene and decode a full-screen
+  // video at the same time without stuttering.
+  const vitaVisible = useVitaStore((s) => s.visible);
+
   return (
-    <Canvas camera={{ position: [0, 0.6, 10.6], fov: 45 }}>
+    <Canvas
+      frameloop={vitaVisible ? "never" : "always"}
+      camera={{ position: [0, 0.6, 10.6], fov: 45 }}
+    >
       <color attach="background" args={["#05070b"]} />
       <fog attach="fog" args={["#05070b", 6, 16]} />
       <ambientLight intensity={0.5} />
@@ -25,7 +33,6 @@ export function HolographicScene() {
       <CameraRig />
       <ParticleField />
       <OrbitController />
-      <VitaFace />
       <PostEffects />
     </Canvas>
   );
