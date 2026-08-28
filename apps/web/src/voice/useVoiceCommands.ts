@@ -25,7 +25,7 @@ import {
   commandPlayer,
   duckMusic,
 } from "./playMusic";
-import { addFavorite, nextFavorite } from "./favoritesStore";
+import { saveTrack, nextFrom, listPlaylists } from "./playlistStore";
 import { showVita, hideVita } from "@/stores/vitaStore";
 import { nudgeVolume } from "@/audio/volumeStore";
 import { briefingFor, findModule } from "@/modules/briefing";
@@ -128,6 +128,8 @@ export function useVoiceCommands() {
   const deafUntil = useRef(0);
   /** Restores music volume once the person has stopped talking. */
   const unduckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The collection last played from, so "дальше" stays inside it. */
+  const lastPlaylist = useRef<string | null>(null);
 
   const runIntent = useCallback((transcript: string, lang: SpeechLang) => {
     const lower = transcript.trim().toLowerCase();
@@ -236,15 +238,15 @@ export function useVoiceCommands() {
         }
         break;
       case "next": {
-        const track = nextFavorite();
-        if (track) {
-          playSavedTrack(track);
-          speak(lang === "ru" ? `Дальше: ${track.title}` : `Next: ${track.title}`, lang);
+        // Continues within whatever collection was last playing, so "дальше"
+        // after "включи подборку для работы" stays in that collection.
+        const picked = nextFrom(lastPlaylist.current);
+        if (picked) {
+          playSavedTrack(picked.track);
+          speak(lang === "ru" ? `Дальше: ${picked.track.title}` : `Next: ${picked.track.title}`, lang);
         } else {
           speak(
-            lang === "ru"
-              ? "В избранном нет следующего трека"
-              : "No next track in favourites",
+            lang === "ru" ? "Дальше ничего не сохранено" : "Nothing saved to play next",
             lang,
           );
         }
@@ -272,50 +274,81 @@ export function useVoiceCommands() {
         break;
       case "favoriteAdd": {
         const now = usePlayStore.getState();
-        if (now.videoId && now.title) {
-          const count = addFavorite({
-            videoId: now.videoId,
-            title: now.title,
-            url: now.url ?? "",
-          });
-          speak(
-            count === null
-              ? lang === "ru"
-                ? "Этот трек уже в избранном"
-                : "That track is already saved"
-              : lang === "ru"
-                ? `Запомнил. В избранном треков: ${count}`
-                : `Saved. ${count} in favorites`,
-            lang,
-          );
-        } else {
+        if (!now.videoId || !now.title) {
           speak(
             lang === "ru"
               ? "Сейчас ничего не играет — нечего запоминать"
               : "Nothing is playing to save",
             lang,
           );
+          break;
         }
+        const outcome = saveTrack(
+          { videoId: now.videoId, title: now.title, url: now.url ?? "" },
+          intent.playlist,
+        );
+        const where = outcome.playlist.name;
+        const total = outcome.playlist.tracks.length;
+        speak(
+          !outcome.added
+            ? lang === "ru"
+              ? `Этот трек уже в подборке «${where}»`
+              : `Already in “${where}”`
+            : outcome.created
+              ? lang === "ru"
+                ? `Создал подборку «${where}» и добавил трек`
+                : `Created “${where}” and saved the track`
+              : lang === "ru"
+                ? `Добавил в «${where}». Всего треков: ${total}`
+                : `Saved to “${where}”. ${total} in it now`,
+          lang,
+        );
         break;
       }
       case "favoritePlay": {
-        const track = nextFavorite();
-        if (!track) {
+        const picked = nextFrom(intent.playlist);
+        if (!picked) {
+          const named = intent.playlist;
           speak(
-            lang === "ru"
-              ? "В избранном пусто. Скажите «запомни трек», когда что-то играет"
-              : "No favorites yet. Say “save track” while something is playing",
+            named
+              ? lang === "ru"
+                ? `Не нашёл подборку «${named}»`
+                : `No collection called “${named}”`
+              : lang === "ru"
+                ? "Пока ничего не сохранено. Скажите «сохрани в подборку», когда что-то играет"
+                : "Nothing saved yet. Say “save to a collection” while something plays",
             lang,
           );
-        } else {
-          playSavedTrack(track);
-          speak(
-            lang === "ru"
-              ? `Включаю избранное: ${track.title}`
-              : `Playing from favorites: ${track.title}`,
-            lang,
-          );
+          break;
         }
+        lastPlaylist.current = picked.playlist.name;
+        playSavedTrack(picked.track);
+        speak(
+          lang === "ru"
+            ? `Включаю «${picked.playlist.name}»: ${picked.track.title}`
+            : `Playing “${picked.playlist.name}”: ${picked.track.title}`,
+          lang,
+        );
+        break;
+      }
+      case "playlistList": {
+        const lists = listPlaylists().filter((p) => p.tracks.length);
+        if (!lists.length) {
+          speak(
+            lang === "ru"
+              ? "Подборок пока нет. Скажите «сохрани в подборку для работы», когда что-то играет"
+              : "No collections yet. Say “save to a collection” while something plays",
+            lang,
+          );
+          break;
+        }
+        const spoken = lists
+          .map((p) => `${p.name} — ${p.tracks.length}`)
+          .join(", ");
+        speak(
+          lang === "ru" ? `Ваши подборки: ${spoken}` : `Your collections: ${spoken}`,
+          lang,
+        );
         break;
       }
       case "play":
@@ -367,6 +400,7 @@ export function useVoiceCommands() {
       intent.kind !== "play" &&
       intent.kind !== "favoriteAdd" &&
       intent.kind !== "favoritePlay" &&
+      intent.kind !== "playlistList" &&
       intent.kind !== "dismiss" &&
       intent.kind !== "pause" &&
       intent.kind !== "resume" &&

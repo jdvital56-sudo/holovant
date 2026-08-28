@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { SearchResult } from "@/app/api/search/route";
-import type { FavoriteTrack } from "./favoritesStore";
+import type { SavedTrack } from "./playlistStore";
 
 export type PlayStatus = "idle" | "finding" | "ready" | "notFound" | "error";
 
@@ -79,7 +79,7 @@ export function duckMusic(quiet: boolean) {
 }
 
 /** Loads a saved track straight into the player, no search. */
-export function playSavedTrack(track: FavoriteTrack) {
+export function playSavedTrack(track: SavedTrack) {
   usePlayStore.setState({
     status: "ready",
     query: track.title,

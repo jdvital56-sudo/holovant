@@ -8,8 +8,9 @@ export type VoiceIntent =
   | { kind: "close"; label: string }
   | { kind: "search"; query: string; label: string }
   | { kind: "play"; query: string; label: string }
-  | { kind: "favoriteAdd"; label: string }
-  | { kind: "favoritePlay"; label: string }
+  | { kind: "favoriteAdd"; playlist: string | null; label: string }
+  | { kind: "favoritePlay"; playlist: string | null; label: string }
+  | { kind: "playlistList"; label: string }
   | { kind: "pause"; label: string }
   | { kind: "resume"; label: string }
   | { kind: "next"; label: string }
@@ -216,15 +217,51 @@ function matchFavorites(text: string): VoiceIntent | null {
   const namesThis =
     containsAny(text, MEDIUM_WORDS) || /(^|\s)(это|этот|эту)(\s|$)/.test(text) || /\bthis\b/.test(text);
 
+  // "Какие у меня подборки" is a question about the collections themselves,
+  // and must not be answered by playing one.
+  if (
+    namesFavorites &&
+    /(^|\s)(каки|какие|что|сколько|перечисли|список|назови|what|which|list)/.test(text)
+  ) {
+    return { kind: "playlistList", label: "list playlists" };
+  }
+
+  const playlist = playlistNameIn(text);
+
   if (containsAny(text, REMEMBER_VERBS) && (namesFavorites || namesThis)) {
-    return { kind: "favoriteAdd", label: "save track" };
+    return { kind: "favoriteAdd", playlist, label: playlist ? `save to ${playlist}` : "save track" };
   }
 
   if (!namesFavorites) return null;
   // "убери из избранного" is a removal, not a request to play it. Removal by
   // voice is not built yet, so leave it alone rather than playing instead.
   if (containsAny(text, FORGET_VERBS)) return null;
-  return { kind: "favoritePlay", label: "play favorites" };
+  return {
+    kind: "favoritePlay",
+    playlist,
+    label: playlist ? `play ${playlist}` : "play favorites",
+  };
+}
+
+/**
+ * The name of a collection inside a spoken phrase.
+ *
+ * "Сохрани в подборку для работы" names one; "включи избранное" does not.
+ * Everything after the word for a collection is the name, minus the small
+ * words a person puts in front of it.
+ */
+function playlistNameIn(text: string): string | null {
+  const match = text.match(
+    /(?:подборк\S*|сборник\S*|плейлист\S*|playlist)\s+(.+)$/,
+  );
+  if (!match) return null;
+
+  const name = match[1]
+    .replace(/^(в|во|из|к|на|to|in|from)\s+/, "")
+    .replace(/\s+(пожалуйста|please)$/, "")
+    .trim();
+
+  return name.length >= 2 ? name : null;
 }
 
 /**
@@ -440,6 +477,7 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
       // Spoken by the caller, which knows the track title and the new count.
       case "favoriteAdd":
       case "favoritePlay":
+      case "playlistList":
         return "";
       case "showFace":
         return intent.show ? "Я здесь" : "Скрываюсь";
@@ -471,6 +509,7 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
       return intent.query ? `Playing ${intent.query}` : "Playing music";
     case "favoriteAdd":
     case "favoritePlay":
+    case "playlistList":
       return "";
     case "showFace":
       return intent.show ? "I am here" : "Hiding";

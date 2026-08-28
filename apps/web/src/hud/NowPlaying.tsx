@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePlayStore, clearPlayback, registerPlayer } from "@/voice/playMusic";
-import { useFavoritesStore, addFavorite, removeFavorite } from "@/voice/favoritesStore";
+import { usePlaylistStore, saveTrack, removeTrack } from "@/voice/playlistStore";
 import { useVolumeStore } from "@/audio/volumeStore";
 
 /**
@@ -21,7 +21,9 @@ export function NowPlaying() {
   const title = usePlayStore((s) => s.title);
   const url = usePlayStore((s) => s.url);
   const videoId = usePlayStore((s) => s.videoId);
-  const saved = useFavoritesStore((s) => (videoId ? s.tracks.some((t) => t.videoId === videoId) : false));
+  const playlists = usePlaylistStore((s) => s.playlists);
+  const saved = videoId ? playlists.some((p) => p.tracks.some((t) => t.videoId === videoId)) : false;
+  const [choosing, setChoosing] = useState(false);
   const volume = useVolumeStore((s) => s.level);
   const frameRef = useRef<HTMLIFrameElement>(null);
 
@@ -99,12 +101,19 @@ export function NowPlaying() {
             {videoId && (
               <button
                 type="button"
-                onClick={() =>
-                  saved
-                    ? removeFavorite(videoId)
-                    : addFavorite({ videoId, title: title ?? "Track", url: url ?? "" })
-                }
-                title={saved ? "remove from favorites" : "save to favorites"}
+                onClick={() => {
+                  if (saved) {
+                    removeTrack(videoId);
+                    setChoosing(false);
+                    return;
+                  }
+                  // With collections in play, saving is a choice rather than a
+                  // single destination — but one click still saves, so nothing
+                  // gained a step.
+                  saveTrack({ videoId, title: title ?? "Track", url: url ?? "" });
+                  setChoosing(true);
+                }}
+                title={saved ? "remove from collections" : "save"}
                 className={`cursor-pointer font-mono text-[11px] transition-colors ${
                   saved ? "text-signal" : "text-mist hover:text-frost"
                 }`}
@@ -168,6 +177,43 @@ export function NowPlaying() {
             </div>
             <div className="px-4 pb-3 pt-2">
               <div className="text-[13px] font-medium leading-snug text-frost">{title}</div>
+
+              {/* Where it went, and where else it could go. Shown only after
+                  saving, so the panel stays a player until it is asked to be
+                  more than one. */}
+              {choosing && playlists.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-mist/70">
+                    в подборку
+                  </span>
+                  {playlists.map((list) => {
+                    const here = list.tracks.some((t) => t.videoId === videoId);
+                    return (
+                      <button
+                        key={list.id}
+                        type="button"
+                        onClick={() =>
+                          here
+                            ? removeTrack(videoId, list.id)
+                            : saveTrack(
+                                { videoId, title: title ?? "Track", url: url ?? "" },
+                                list.name,
+                              )
+                        }
+                        className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
+                          here
+                            ? "border-signal/50 bg-signal/10 text-signal"
+                            : "border-white/10 text-mist hover:border-signal/40 hover:text-frost"
+                        }`}
+                      >
+                        {here ? "✓ " : ""}
+                        {list.name}
+                        <span className="ml-1 text-mist/50">{list.tracks.length}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               {/* Some videos forbid embedding; the link is the way out of that. */}
               {url && (
                 <a
