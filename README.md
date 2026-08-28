@@ -30,6 +30,7 @@ Put these in `apps/web/.env.local`, which is git-ignored.
 | `HOLOVANT_PIPER_PYTHON` | The product's own voice — path to a venv Python with Piper | The browser's voice, which differs per machine |
 | `HOLOVANT_PIPER_VOICE` | Path to the `.onnx` voice model | As above |
 | `FIRECRAWL_API_KEY` | Web search | Search is off |
+| `YOUTUBE_API_KEY` | Finding music the supported way, embeddable results only | Falls back to reading the results page — works, but against YouTube's terms |
 | `HOLOVANT_BRAIN_PATH` | The second brain — a folder of Markdown notes | The module asks you to connect one |
 | `HOLOVANT_ACCESS_TOKEN` | Requires a bearer token on every `/api/*` call | The API is open — correct on one local machine, **not** on a public address |
 | `NEXT_PUBLIC_HOLOVANT_ASSISTANT_NAME` | What the assistant is called | `Vita` |
