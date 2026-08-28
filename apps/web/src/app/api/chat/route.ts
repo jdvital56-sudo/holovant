@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     assistantName =
       typeof body.assistantName === "string" && body.assistantName.trim()
         ? body.assistantName.trim().slice(0, 40)
-        : "Vita";
+        : "Thor";
   } catch {
     return NextResponse.json({ error: "Malformed request." }, { status: 400 });
   }

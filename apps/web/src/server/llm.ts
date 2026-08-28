@@ -9,6 +9,7 @@
  */
 
 import { runTool, type ToolDefinition } from "./tools";
+import { TOOL_MARKER } from "./toolMarker";
 
 export interface ToolCall {
   id: string;
@@ -36,6 +37,7 @@ const REQUEST_TIMEOUT_MS = 30000;
  * rather than working, and the user is listening to silence.
  */
 const MAX_TOOL_ROUNDS = 3;
+
 
 export function llmConfig() {
   return {
@@ -188,6 +190,12 @@ export async function* streamChat(
     // Text and a tool call in the same turn: the text has already been spoken,
     // so running the tool would answer a question the user has heard answered.
     if (sawText) return;
+
+    // Checking takes seconds, and until now those seconds were silence — the
+    // system looked like it had stopped rather than like it was working. The
+    // client turns this into a short spoken acknowledgement and drops it from
+    // the answer.
+    if (round === 0) yield TOOL_MARKER;
 
     conversation.push({ role: "assistant", content: "", tool_calls: collected.toolCalls });
 

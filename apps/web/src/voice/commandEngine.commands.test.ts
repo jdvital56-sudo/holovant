@@ -3,13 +3,13 @@ import { matchIntent } from "./commandEngine";
 
 describe("wake word", () => {
   it("treats the bare name as a call for attention", () => {
-    expect(matchIntent("Вита")).toMatchObject({ kind: "wake" });
-    expect(matchIntent("вита ты тут")).toMatchObject({ kind: "wake" });
+    expect(matchIntent("Тор")).toMatchObject({ kind: "wake" });
+    expect(matchIntent("тор ты тут")).toMatchObject({ kind: "wake" });
   });
 
   it("lets the name in front of a command fall through to the command", () => {
-    expect(matchIntent("вита покажи своё лицо")).toMatchObject({ kind: "showFace", show: true });
-    expect(matchIntent("вита включи музыку")).toMatchObject({ kind: "play" });
+    expect(matchIntent("тор покажи своё лицо")).toMatchObject({ kind: "showFace", show: true });
+    expect(matchIntent("тор включи музыку")).toMatchObject({ kind: "play" });
   });
 });
 

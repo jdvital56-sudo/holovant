@@ -10,13 +10,21 @@ import {
   speak,
   stopSpeaking,
   primeVoices,
+  applyVolumeNow,
   isSystemSpeaking,
   recentSpokenText,
   msSinceSpeechEnded,
   type SpeechLang,
 } from "./speech";
 import { runSearch, clearSearch } from "./searchStore";
-import { playTrack, playSavedTrack, usePlayStore, clearPlayback } from "./playMusic";
+import {
+  playTrack,
+  playSavedTrack,
+  usePlayStore,
+  clearPlayback,
+  commandPlayer,
+  duckMusic,
+} from "./playMusic";
 import { addFavorite, nextFavorite } from "./favoritesStore";
 import { showVita, hideVita } from "@/stores/vitaStore";
 import { nudgeVolume } from "@/audio/volumeStore";
@@ -48,9 +56,20 @@ const AFTER_STOP_DEAF_MS = 1200;
  */
 const STOP_WORDS = [
   "стоп",
+  "стой",
+  "стойте",
+  // He said "стоп или остановись" and only the first was listed.
+  "остановись",
+  "остановитесь",
+  "прекрати",
+  "прекратите",
+  "отмена",
   "stop",
+  "cancel",
+  "enough",
   "хватит",
   "замолчи",
+  "замолкни",
   "замолчите",
   "молчи",
   "помолчи",
@@ -107,6 +126,8 @@ export function useVoiceCommands() {
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Epoch ms until which recognition results are ignored (post-stop tail). */
   const deafUntil = useRef(0);
+  /** Restores music volume once the person has stopped talking. */
+  const unduckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const runIntent = useCallback((transcript: string, lang: SpeechLang) => {
     const lower = transcript.trim().toLowerCase();
@@ -204,13 +225,40 @@ export function useVoiceCommands() {
       case "wake":
         // Just answer. Nothing else to do.
         break;
-      case "volume": {
-        const level = nudgeVolume(intent.direction);
-        if (level <= 0.001) {
-          // Say the floor was hit at the new (silent) level would be unheard;
-          // bump the confirmation up one notch so it is audible.
-          nudgeVolume("up");
+      case "pause":
+        if (!commandPlayer("pause")) {
+          speak(lang === "ru" ? "Сейчас ничего не играет" : "Nothing is playing", lang);
         }
+        break;
+      case "resume":
+        if (!commandPlayer("resume")) {
+          speak(lang === "ru" ? "Нечего продолжать" : "Nothing to resume", lang);
+        }
+        break;
+      case "next": {
+        const track = nextFavorite();
+        if (track) {
+          playSavedTrack(track);
+          speak(lang === "ru" ? `Дальше: ${track.title}` : `Next: ${track.title}`, lang);
+        } else {
+          speak(
+            lang === "ru"
+              ? "В избранном нет следующего трека"
+              : "No next track in favourites",
+            lang,
+          );
+        }
+        break;
+      }
+      case "volume": {
+        let level = nudgeVolume(intent.direction);
+        // A confirmation at zero cannot be heard, so the floor is one notch up.
+        if (level <= 0.001) level = nudgeVolume("up");
+        // The reply already queued would otherwise play at the old level and
+        // the change would only take effect on the sentence after it.
+        applyVolumeNow(level);
+        commandPlayer(usePlayStore.getState().paused ? "pause" : "resume");
+        setLastCommand(`${lang === "ru" ? "громкость" : "volume"} ${Math.round(level * 100)}%`);
         break;
       }
       case "dismiss":
@@ -319,7 +367,10 @@ export function useVoiceCommands() {
       intent.kind !== "play" &&
       intent.kind !== "favoriteAdd" &&
       intent.kind !== "favoritePlay" &&
-      intent.kind !== "dismiss"
+      intent.kind !== "dismiss" &&
+      intent.kind !== "pause" &&
+      intent.kind !== "resume" &&
+      intent.kind !== "next"
     ) {
       speak(replyFor(intent, lang), lang);
     }
@@ -336,7 +387,9 @@ export function useVoiceCommands() {
     stopSpeaking();
     clearChat();
     clearSearch();
-    clearPlayback();
+    // Paused rather than closed: "стоп" then "продолжи" should carry on from
+    // where it was, and closing the panel loses the track entirely.
+    commandPlayer("pause");
     playBlip("confirm");
     setTranscript("");
     setLastCommand(lang === "ru" ? "стоп" : "stop");
@@ -374,6 +427,15 @@ export function useVoiceCommands() {
       // Just cut the voice — the tail of that sentence is still coming back
       // through the microphone. Ignore everything until it has passed.
       if (Date.now() < deafUntil.current) return;
+
+      // Somebody is talking. Step the music back so the rest of the sentence
+      // reaches the microphone over it — commands were being lost to the
+      // speakers, which is why nothing responded while a track played.
+      duckMusic(true);
+      if (unduckTimer.current) clearTimeout(unduckTimer.current);
+      unduckTimer.current = setTimeout(() => {
+        if (!isSystemSpeaking()) duckMusic(false);
+      }, 2500);
 
       const speakingNow = isSystemSpeaking();
 

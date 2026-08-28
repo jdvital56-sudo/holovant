@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { speak, speakQueued } from "./speech";
 import { searchBrain } from "@/modules/brain/brainStore";
 import { ASSISTANT_NAME } from "@/config/assistant";
+import { TOOL_MARKER } from "@/server/toolMarker";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -93,6 +94,7 @@ export async function askAssistant(question: string, moduleContext: string | nul
     const decoder = new TextDecoder();
     let full = "";
     let unspoken = "";
+    let acknowledged = false;
 
     useChatStore.setState({ status: "streaming" });
 
@@ -101,7 +103,18 @@ export async function askAssistant(question: string, moduleContext: string | nul
       if (done) break;
       if (requestId !== activeRequest) return; // A newer question replaced this one.
 
-      const piece = decoder.decode(value, { stream: true });
+      let piece = decoder.decode(value, { stream: true });
+
+      // The model has reached for a tool and the answer is seconds away. Say
+      // so, once, rather than leaving the user listening to silence and
+      // wondering whether it heard them at all.
+      if (piece.includes(TOOL_MARKER)) {
+        piece = piece.split(TOOL_MARKER).join("");
+        if (!acknowledged) {
+          acknowledged = true;
+          speakQueued(lang === "ru" ? "Секунду, проверяю" : "One moment, checking", lang);
+        }
+      }
 
       // The server marks a mid-stream failure inline, because the status code
       // is already sent by then. Without this the marker is read aloud, and

@@ -11,6 +11,8 @@ interface PlayState {
   url: string | null;
   /** YouTube id, so the track can be played inside the app rather than elsewhere. */
   videoId: string | null;
+  /** Paused by voice — the track stays loaded, unlike closing the panel. */
+  paused: boolean;
 }
 
 export const usePlayStore = create<PlayState>(() => ({
@@ -19,6 +21,7 @@ export const usePlayStore = create<PlayState>(() => ({
   title: null,
   url: null,
   videoId: null,
+  paused: false,
 }));
 
 /**
@@ -41,7 +44,38 @@ function videoIdFrom(url: string): string | null {
 }
 
 export function clearPlayback() {
-  usePlayStore.setState({ status: "idle", query: "", title: null, url: null, videoId: null });
+  usePlayStore.setState({ status: "idle", query: "", title: null, url: null, videoId: null, paused: false });
+}
+
+/**
+ * Commands sent to the embedded player.
+ *
+ * The panel owns the iframe, so it registers a sender here rather than the
+ * voice layer reaching into the DOM. Null when nothing is mounted, which is
+ * how "пауза" with no player can answer honestly instead of pretending.
+ */
+type PlayerCommand = "pause" | "resume" | "duck" | "unduck";
+let sendToPlayer: ((command: PlayerCommand) => void) | null = null;
+
+export function registerPlayer(send: ((command: PlayerCommand) => void) | null) {
+  sendToPlayer = send;
+}
+
+export function commandPlayer(command: PlayerCommand): boolean {
+  if (!sendToPlayer || usePlayStore.getState().status === "idle") return false;
+  sendToPlayer(command);
+  if (command === "pause") usePlayStore.setState({ paused: true });
+  if (command === "resume") usePlayStore.setState({ paused: false });
+  return true;
+}
+
+/**
+ * Music through the speakers is the loudest thing the microphone hears, and it
+ * drowns out the person talking to the system. Ducking while the assistant
+ * listens or speaks is what makes a command land at all over a playing track.
+ */
+export function duckMusic(quiet: boolean) {
+  sendToPlayer?.(quiet ? "duck" : "unduck");
 }
 
 /** Loads a saved track straight into the player, no search. */
@@ -52,6 +86,7 @@ export function playSavedTrack(track: FavoriteTrack) {
     title: track.title,
     url: track.url,
     videoId: track.videoId,
+    paused: false,
   });
 }
 
@@ -67,11 +102,11 @@ export function playSavedTrack(track: FavoriteTrack) {
 export async function playTrack(query: string): Promise<PlayStatus> {
   // No title given ("включи музыку") — go straight to the default stream.
   if (!query.trim()) {
-    usePlayStore.setState({ status: "ready", query: "музыка", ...DEFAULT_MUSIC });
+    usePlayStore.setState({ status: "ready", query: "музыка", paused: false, ...DEFAULT_MUSIC });
     return "ready";
   }
 
-  usePlayStore.setState({ status: "finding", query, title: null, url: null, videoId: null });
+  usePlayStore.setState({ status: "finding", query, title: null, url: null, videoId: null, paused: false });
 
   // YouTube's own results page returns a real watch id for almost any phrasing;
   // the generic web search below only finds one when a result happens to be a
@@ -90,6 +125,7 @@ export async function playTrack(query: string): Promise<PlayStatus> {
           title: hit.title || query,
           url: `https://www.youtube.com/watch?v=${hit.videoId}`,
           videoId: hit.videoId,
+          paused: false,
         });
         return "ready";
       }
@@ -121,6 +157,7 @@ export async function playTrack(query: string): Promise<PlayStatus> {
         title: result.title,
         url: result.url,
         videoId,
+        paused: false,
       });
       return "ready";
     }

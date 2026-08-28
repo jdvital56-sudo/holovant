@@ -10,6 +10,9 @@ export type VoiceIntent =
   | { kind: "play"; query: string; label: string }
   | { kind: "favoriteAdd"; label: string }
   | { kind: "favoritePlay"; label: string }
+  | { kind: "pause"; label: string }
+  | { kind: "resume"; label: string }
+  | { kind: "next"; label: string }
   | { kind: "showFace"; show: boolean; label: string }
   | { kind: "wake"; label: string }
   | { kind: "volume"; direction: "up" | "down"; label: string }
@@ -133,6 +136,19 @@ function matchPlay(text: string): VoiceIntent | null {
   // "включи музыку Radiohead" is a request for Radiohead; the word "музыку"
   // names the medium and is not part of what to search for.
   const rest = text.slice(verb.length).trim();
+
+  // "Включи Instagram" is a request to open a module, not to find a track
+  // called Instagram. Without this it went to YouTube, played a video about
+  // Instagram, and the module never opened — which reads as no reaction at all.
+  for (const candidate of moduleRegistry) {
+    const aliases = MODULE_ALIASES[candidate.id];
+    // Music is the exception: "включи музыку" is about playing, not opening.
+    if (!aliases || candidate.id === "music") continue;
+    if (containsAny(rest, aliases)) {
+      return { kind: "open", moduleId: candidate.id, label: `open ${candidate.label}` };
+    }
+  }
+
   const query = stripLeading(rest, [...MEDIUM_WORDS, ...SEARCH_FILLER]);
 
   if (query.split(" ").filter(Boolean).length < 1) {
@@ -145,6 +161,25 @@ function matchPlay(text: string): VoiceIntent | null {
     return null;
   }
   return { kind: "play", query, label: `play “${query}”` };
+}
+
+/**
+ * Transport control for whatever is playing. Separate from the play matcher
+ * because "поставь на паузу" and "поставь Radiohead" share a verb and mean
+ * opposite things, and from dismiss because pausing keeps the track loaded —
+ * closing the panel loses it.
+ */
+function matchPlayback(text: string): VoiceIntent | null {
+  if (/(^|\s)(пауза|паузу|приостанови|притормози|pause)(\s|$)/.test(text)) {
+    return { kind: "pause", label: "pause" };
+  }
+  if (/(^|\s)(продолжи|продолжай|дальше|возобнови|resume|continue)(\s|$)/.test(text)) {
+    return { kind: "resume", label: "resume" };
+  }
+  if (/(^|\s)(следующ\S*|переключи трек|next|skip)(\s|$)/.test(text)) {
+    return { kind: "next", label: "next track" };
+  }
+  return null;
 }
 
 /** Verbs that ask for a track to be saved, or the collection to be named. */
@@ -166,11 +201,17 @@ const FAVORITE_WORDS = [
  * reaches the collection instead of the default stream.
  */
 function matchFavorites(text: string): VoiceIntent | null {
+  // "Моя любимая музыка" has a word between the possessive and the noun, which
+  // an adjacency test missed — it fell through to opening the Music module, and
+  // the saved tracks looked like they had never been saved at all.
+  const namesMine = /(^|\s)(мо[йяю]|мои|наш[аиу]?)(\s|$)/.test(text) || /\bmy\b/.test(text);
+  const namesLoved = /любим|favou?rite/.test(text);
+  const namesMedium = containsAny(text, MEDIUM_WORDS) || /\b(music|tracks?|songs?)\b/.test(text);
+
   const namesFavorites =
     containsAny(text, FAVORITE_WORDS) ||
-    /(^|\s)мо[йяю]\s+(музык|песн|трек|подборк|сборник)/.test(text) ||
-    /(^|\s)мои\s+(трек|песн|любим)/.test(text) ||
-    /\bmy\s+(music|tracks?|songs?|playlist|mix|favou?rites?)\b/.test(text);
+    ((namesMine || namesLoved) && namesMedium) ||
+    (namesMine && namesLoved);
 
   const namesThis =
     containsAny(text, MEDIUM_WORDS) || /(^|\s)(это|этот|эту)(\s|$)/.test(text) || /\bthis\b/.test(text);
@@ -229,7 +270,7 @@ function matchWake(text: string): VoiceIntent | null {
   if (!words.length || words.length > 3) return null;
   const aliases = assistantAliases();
   if (!aliases.includes(words[0])) return null;
-  // "вита покажи лицо" is a command with a name in front — let it fall through.
+  // "тор покажи лицо" is a command with a name in front — let it fall through.
   const rest = words.slice(1).join(" ");
   if (!rest || ["ты тут", "ты здесь", "you there", "here"].includes(rest)) {
     return { kind: "wake", label: "wake" };
@@ -319,6 +360,11 @@ export function matchIntent(rawTranscript: string): VoiceIntent | null {
   const face = matchFace(text);
   if (face) return face;
 
+  // Before dismiss: "останови музыку" is a pause, not a request to close the
+  // player and lose the track.
+  const playback = matchPlayback(text);
+  if (playback) return playback;
+
   const dismiss = matchDismiss(text);
   if (dismiss) return dismiss;
 
@@ -399,6 +445,12 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
         return intent.show ? "Я здесь" : "Скрываюсь";
       case "wake":
         return "Да, сэр";
+      case "pause":
+        return "Пауза";
+      case "resume":
+        return "Продолжаю";
+      case "next":
+        return "Следующий";
       case "volume":
         return intent.direction === "up" ? "Громче" : "Тише";
       case "dismiss":
@@ -424,6 +476,12 @@ export function replyFor(intent: VoiceIntent, lang: "ru" | "en"): string {
       return intent.show ? "I am here" : "Hiding";
     case "wake":
       return "Yes, sir";
+    case "pause":
+      return "Paused";
+    case "resume":
+      return "Resuming";
+    case "next":
+      return "Next";
     case "volume":
       return intent.direction === "up" ? "Louder" : "Quieter";
     case "dismiss":

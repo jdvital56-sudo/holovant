@@ -13,9 +13,9 @@ export interface SearchResult {
 }
 
 const ENDPOINT = "https://api.firecrawl.dev/v2/search";
-const RESULT_LIMIT = 5;
+const RESULT_LIMIT = 4;
 /** An answer that arrives after this has stopped being a conversation. */
-const TIMEOUT_MS = 12000;
+const TIMEOUT_MS = 9000;
 
 interface FirecrawlItem {
   title?: string;

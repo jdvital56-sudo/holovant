@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { usePlayStore, clearPlayback } from "@/voice/playMusic";
+import { usePlayStore, clearPlayback, registerPlayer } from "@/voice/playMusic";
 import { useFavoritesStore, addFavorite, removeFavorite } from "@/voice/favoritesStore";
 import { useVolumeStore } from "@/audio/volumeStore";
 
@@ -50,6 +50,35 @@ export function NowPlaying() {
       );
     };
   }, [videoId]);
+
+  // Transport and ducking, driven by voice. Registered from here because the
+  // panel owns the iframe; the voice layer asks, it does not reach into the DOM.
+  useEffect(() => {
+    registerPlayer((command) => {
+      const win = frameRef.current?.contentWindow;
+      if (!win) return;
+      const send = (func: string, args: unknown[] = []) =>
+        win.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+      const level = Math.round(useVolumeStore.getState().level * 100);
+      switch (command) {
+        case "pause":
+          send("pauseVideo");
+          break;
+        case "resume":
+          send("playVideo");
+          break;
+        // Music through the speakers is the loudest thing the microphone hears.
+        // Dropping it to a fifth is what lets a spoken command land at all.
+        case "duck":
+          send("setVolume", [Math.max(5, Math.round(level * 0.2))]);
+          break;
+        case "unduck":
+          send("setVolume", [level]);
+          break;
+      }
+    });
+    return () => registerPlayer(null);
+  }, []);
 
   if (status === "idle") return null;
 

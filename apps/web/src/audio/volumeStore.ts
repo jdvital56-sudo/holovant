@@ -13,7 +13,9 @@ interface VolumeState {
 }
 
 const KEY = "holovant.volume.v1";
-const STEP = 0.15;
+// A fifth per step: 0.15 was a change he could not hear, which reads as the
+// command doing nothing at all.
+const STEP = 0.2;
 
 function load(): number {
   if (typeof window === "undefined") return 0.9;

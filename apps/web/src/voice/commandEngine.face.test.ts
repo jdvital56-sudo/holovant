@@ -21,7 +21,7 @@ describe("hiding the face", () => {
 
   it("still shows it", () => {
     expect(matchIntent("покажи своё лицо")).toMatchObject({ kind: "showFace", show: true });
-    expect(matchIntent("вита покажи лицо")).toMatchObject({ kind: "showFace", show: true });
+    expect(matchIntent("тор покажи лицо")).toMatchObject({ kind: "showFace", show: true });
   });
 
   it("does not mistake a bare close for a face command", () => {

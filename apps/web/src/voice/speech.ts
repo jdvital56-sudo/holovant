@@ -8,6 +8,7 @@
 
 import { meterAudioElement } from "@/audio/voiceLevel";
 import { getVolume } from "@/audio/volumeStore";
+import { duckMusic } from "./playMusic";
 import { forSpeech, forVoice, type SpeechLang } from "./speechText";
 
 export type { SpeechLang };
@@ -137,12 +138,18 @@ function markDone() {
   settleTimer = setTimeout(() => {
     speaking = false;
     speechEndedAt = Date.now();
+    duckMusic(false);
   }, ECHO_TAIL_MS);
 }
 
 let currentAudio: HTMLAudioElement | null = null;
 /** Rising id, so a slow reply cannot start playing after a newer one has. */
 let speechSequence = 0;
+
+/** The reply already playing, so a volume change is heard now, not next time. */
+export function applyVolumeNow(level: number) {
+  if (currentAudio) currentAudio.volume = level;
+}
 
 function stopServerVoice() {
   if (!currentAudio) return;
@@ -214,6 +221,9 @@ export function speak(text: string, lang: SpeechLang = "ru") {
   // Held from the moment the line is requested, not from when audio starts, so
   // the microphone cannot pick up the reply during synthesis either.
   speaking = true;
+  // Music through the speakers competes with the assistant and with the
+  // microphone. It steps back while there is something to hear.
+  duckMusic(true);
   void deliver(clean, lang, sequence);
 }
 
@@ -232,6 +242,7 @@ export function speakQueued(text: string, lang: SpeechLang = "ru") {
   if (!trimmed) return;
   queue.push({ text: trimmed, lang });
   speaking = true;
+  duckMusic(true);
   void drain();
 }
 
@@ -324,6 +335,7 @@ export function stopSpeaking() {
   stopServerVoice();
   speaking = false;
   speechEndedAt = Date.now();
+  duckMusic(false);
   if (settleTimer) clearTimeout(settleTimer);
   if (isSpeechSynthesisAvailable()) window.speechSynthesis.cancel();
 }
