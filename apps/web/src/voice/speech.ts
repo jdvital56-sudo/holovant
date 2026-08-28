@@ -41,6 +41,57 @@ export function forSpeech(text: string): string {
     .trim();
 }
 
+/**
+ * Turns figures into something a synthesiser says as a person would.
+ *
+ * "$80,270" was read out as "знак доллара восемьдесят запятая двести семьдесят",
+ * and "44.48" as "сорок четыре точка сорок восемь". The separators and symbols
+ * are punctuation to the voice and quantity to the listener, so they are
+ * resolved into words here rather than left for it to guess.
+ *
+ * Speech only. The panel keeps "$80,270", which is what is readable on screen.
+ */
+export function forVoice(text: string, lang: SpeechLang = "ru"): string {
+  const ru = lang === "ru";
+  let out = forSpeech(text);
+
+  // Thousands separators first, so a grouped number is one quantity before
+  // anything looks for a decimal point in it.
+  for (let pass = 0; pass < 3; pass++) {
+    out = out.replace(/(\d),(\d{3})\b/g, "$1$2").replace(/(\d)[  ](\d{3})\b/g, "$1$2");
+  }
+
+  // Currency and units, before the decimal split so "$44.48" keeps its symbol
+  // attached to the whole figure.
+  // The whole figure is captured, not its first digit: "$100" must not become
+  // "1 долларов 00".
+  const AMOUNT = String.raw`(\d+(?:[.,]\d+)?)`;
+  out = out
+    .replace(new RegExp(`\\$\\s?${AMOUNT}`, "g"), ru ? "$1 долларов" : "$1 dollars")
+    .replace(new RegExp(`€\\s?${AMOUNT}`, "g"), ru ? "$1 евро" : "$1 euros")
+    .replace(new RegExp(`₴\\s?${AMOUNT}`, "g"), ru ? "$1 гривен" : "$1 hryvnia")
+    .replace(new RegExp(`£\\s?${AMOUNT}`, "g"), ru ? "$1 фунтов" : "$1 pounds");
+
+  // And the same symbols written after the figure, which is how they appear in
+  // Ukrainian and most European copy: "45,30 ₴".
+  out = out
+    .replace(new RegExp(`${AMOUNT}\\s?₴`, "g"), ru ? "$1 гривен" : "$1 hryvnia")
+    .replace(new RegExp(`${AMOUNT}\\s?€`, "g"), ru ? "$1 евро" : "$1 euros")
+    .replace(new RegExp(`${AMOUNT}\\s?\\$`, "g"), ru ? "$1 долларов" : "$1 dollars");
+
+  // A trailing symbol reads as its name, not its punctuation.
+  out = out
+    .replace(/(\d)\s?%/g, ru ? "$1 процентов" : "$1 percent")
+    .replace(/(\d)\s?°\s?[CС]/g, ru ? "$1 градусов" : "$1 degrees")
+    .replace(/(\d)\s?°/g, ru ? "$1 градусов" : "$1 degrees");
+
+  // The decimal separator itself. Said aloud a person joins the halves with a
+  // word, never with the name of the mark between them.
+  out = out.replace(/(\d+)[.,](\d+)/g, ru ? "$1 и $2" : "$1 point $2");
+
+  return out.replace(/\s{2,}/g, " ").replace(/\s+([,.!?;:…])/g, "$1").trim();
+}
+
 let cachedVoices: SpeechSynthesisVoice[] = [];
 
 export function isSpeechSynthesisAvailable() {
@@ -207,7 +258,7 @@ async function speakOnServer(text: string, sequence: number): Promise<boolean> {
  * the product still talks on a deployment with no speech service behind it.
  */
 export function speak(text: string, lang: SpeechLang = "ru") {
-  const clean = forSpeech(text ?? "");
+  const clean = forVoice(text ?? "", lang);
   if (!clean) return;
   queue.length = 0;
   const sequence = ++speechSequence;
@@ -230,7 +281,7 @@ let draining = false;
  * behaviour for one-off confirmations, which is what `speak` is for.
  */
 export function speakQueued(text: string, lang: SpeechLang = "ru") {
-  const trimmed = forSpeech(text ?? "");
+  const trimmed = forVoice(text ?? "", lang);
   if (!trimmed) return;
   queue.push({ text: trimmed, lang });
   speaking = true;

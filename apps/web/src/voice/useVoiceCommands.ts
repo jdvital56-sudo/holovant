@@ -157,20 +157,17 @@ export function useVoiceCommands() {
         return;
       }
 
-      // Do not stack a question while one is still being answered or spoken,
-      // and drop anything that is mostly the last answer coming back through
-      // the microphone. This is what made it ramble at itself.
+      // Do not stack a question on one still being answered or spoken.
+      //
+      // There was a second guard here that dropped a question whose words
+      // mostly appeared in the previous answer, meant to catch echo. It caught
+      // follow-ups instead: ask about the exchange rate, then ask again, and
+      // every word of the second question was in the first answer, so it was
+      // discarded in silence. Echo is already handled where it happens — the
+      // recogniser ignores what it hears while the assistant speaks.
       const chatStatus = useChatStore.getState().status;
       if (chatStatus === "thinking" || chatStatus === "streaming" || isSystemSpeaking()) {
         return;
-      }
-      const lastAnswer =
-        [...useChatStore.getState().history].reverse().find((t) => t.role === "assistant")?.content.toLowerCase() ??
-        "";
-      if (lastAnswer) {
-        const qWords = question.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-        const overlap = qWords.filter((w) => lastAnswer.includes(w)).length;
-        if (qWords.length >= 2 && overlap / qWords.length > 0.7) return;
       }
 
       // Otherwise it is a question for the assistant.
