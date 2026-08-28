@@ -58,10 +58,10 @@ describe("forVoice — numbers said as a person says them", () => {
   it("says currency and units by name, symbol before or after", () => {
     expect(forVoice("$100")).toBe("100 долларов");
     expect(forVoice("€50")).toBe("50 евро");
-    expect(forVoice("₴42")).toBe("42 гривен");
-    expect(forVoice("42 ₴")).toBe("42 гривен");
-    expect(forVoice("рост 3%")).toBe("рост 3 процентов");
-    expect(forVoice("сейчас 22°C")).toBe("сейчас 22 градусов");
+    expect(forVoice("₴42")).toBe("42 гривны");
+    expect(forVoice("42 ₴")).toBe("42 гривны");
+    expect(forVoice("рост 3%")).toBe("рост 3 процента");
+    expect(forVoice("сейчас 22°C")).toBe("сейчас 22 градуса");
   });
 
   /** The sentences the assistant actually produced when he asked. */
@@ -70,17 +70,17 @@ describe("forVoice — numbers said as a person says them", () => {
       "Курс доллара к гривне сейчас 41 и 25 гривны за доллар.",
     );
     expect(forVoice("Биткоин торгуется около $80,270, за сутки вырос на 1.5%.")).toBe(
-      "Биткоин торгуется около 80270 долларов, за сутки вырос на 1 и 5 процентов.",
+      "Биткоин торгуется около 80270 долларов, за сутки вырос на 1 и 5 процента.",
     );
     expect(forVoice("Сейчас в Киеве 22°C, ощущается как 20°C.")).toBe(
-      "Сейчас в Киеве 22 градусов, ощущается как 20 градусов.",
+      "Сейчас в Киеве 22 градуса, ощущается как 20 градусов.",
     );
-    expect(forVoice("€1 = 45,30 ₴")).toBe("1 евро = 45 и 30 гривен");
+    expect(forVoice("€1 = 45,30 ₴")).toBe("1 евро = 45 и 30 гривны");
   });
 
   it("leaves ordinary sentences alone", () => {
     expect(forVoice("Открываю Instagram")).toBe("Открываю Instagram");
-    expect(forVoice("Сегодня 28 августа")).toBe("Сегодня 28 августа");
+    expect(forVoice("Сегодня 28 августа")).toBe("Сегодня двадцать восьмого августа");
   });
 
   it("still strips markdown", () => {
@@ -127,7 +127,7 @@ describe("forVoice — signs the synthesiser would name", () => {
 describe("forVoice — abbreviations said in full", () => {
   it("says currency short forms as words", () => {
     expect(forVoice("Курс НБУ — 44,57 грн за доллар")).toBe(
-      "Курс НБУ, 44 и 57 гривен за доллар",
+      "Курс НБУ, 44 и 57 гривны за доллар",
     );
     expect(forVoice("оборот 12 млн руб. в год")).toBe("оборот 12 миллионов рублей в год");
     expect(forVoice("50 тыс. клиентов")).toBe("50 тысяч клиентов");
@@ -141,7 +141,7 @@ describe("forVoice — abbreviations said in full", () => {
   });
 
   it("expands a unit only when a figure precedes it", () => {
-    expect(forVoice("до объекта 3 км")).toBe("до объекта 3 километров");
+    expect(forVoice("до объекта 3 км")).toBe("до объекта 3 километра");
     // "см" on its own is as likely to be "смотри" as centimetres.
     expect(forVoice("см выше")).toBe("см выше");
     expect(forVoice("длина 7 см")).toBe("длина 7 сантиметров");
@@ -162,12 +162,12 @@ describe("forVoice — abbreviations said in full", () => {
 describe("forVoice — a range is said with words", () => {
   it("reads a price range as from-to, not as a list", () => {
     expect(forVoice("покупают за 44,30–44,40 грн")).toBe(
-      "покупают за от 44 и 30 до 44 и 40 гривен",
+      "покупают за от 44 и 30 до 44 и 40 гривны",
     );
     expect(forVoice("сегодня от 12–22 градусов")).toBe("сегодня от 12 до 22 градусов");
   });
 
   it("leaves a dash between words as a pause", () => {
-    expect(forVoice("Курс НБУ — 44,57 грн")).toBe("Курс НБУ, 44 и 57 гривен");
+    expect(forVoice("Курс НБУ — 44,57 грн")).toBe("Курс НБУ, 44 и 57 гривны");
   });
 });

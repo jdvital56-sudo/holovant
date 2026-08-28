@@ -28,10 +28,46 @@ describe("what the demonstration will actually sound like", () => {
   });
 
   it("keeps the numbers themselves intact", () => {
-    expect(forVoice(SPOKEN[0])).toContain("44 и 57 гривен");
+    expect(forVoice(SPOKEN[0])).toContain("44 и 57 гривны");
     expect(forVoice(SPOKEN[1])).toContain("80270 долларов");
     expect(forVoice(SPOKEN[2])).toContain("8 километров в час");
     expect(forVoice(SPOKEN[3])).toContain("1920 на 1080");
     expect(forVoice(SPOKEN[4])).toContain("12 миллионов рублей");
+  });
+});
+
+/**
+ * "Сейчас 22, пятница, 26 год" is what he heard when he asked the time in
+ * Turkey. Russian agreement is the difference between a product and a toy,
+ * and he said so in those words.
+ */
+describe("endings, as a Russian speaker expects them", () => {
+  it("says a date the way a person says it", () => {
+    expect(forVoice("Сегодня пятница, 28 августа 2026 года.")).toBe(
+      "Сегодня пятница, двадцать восьмого августа две тысячи двадцать шестого года.",
+    );
+    expect(forVoice("Это было в 2020 году")).toBe("Это было в две тысячи двадцатом году");
+    expect(forVoice("Наступил 2026 год")).toBe("Наступил две тысячи двадцать шестой год");
+    expect(forVoice("Дата 28.08.2026")).toBe(
+      "Дата двадцать восьмого августа две тысячи двадцать шестого года",
+    );
+  });
+
+  it("says a clock time as hours and minutes", () => {
+    expect(forVoice("Сейчас 22:08")).toBe("Сейчас 22 часа 8 минут");
+    expect(forVoice("в 21:01")).toBe("в 21 час 1 минута");
+    expect(forVoice("ровно 15:00")).toBe("ровно 15 часов ровно");
+  });
+
+  it("agrees the unit with its number", () => {
+    expect(forVoice("1 градус")).toBe("1 градус");
+    expect(forVoice("сейчас 22°C")).toBe("сейчас 22 градуса");
+    expect(forVoice("сейчас 15°C")).toBe("сейчас 15 градусов");
+    expect(forVoice("$1")).toBe("1 доллар");
+    expect(forVoice("$2")).toBe("2 доллара");
+    expect(forVoice("$11")).toBe("11 долларов");
+    expect(forVoice("21 млн")).toBe("21 миллион");
+    expect(forVoice("22 млн")).toBe("22 миллиона");
+    expect(forVoice("25 млн")).toBe("25 миллионов");
   });
 });

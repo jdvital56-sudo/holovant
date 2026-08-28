@@ -6,6 +6,8 @@
  * read out by its name.
  */
 
+import { pluralRu, dayOrdinal, yearOrdinal, type GrammaticalCase, type NounForms } from "./russianNumbers";
+
 export type SpeechLang = "ru" | "en";
 
 /**
@@ -64,6 +66,12 @@ export function forVoice(text: string, lang: SpeechLang = "ru"): string {
 
   let out = forSpeech(ranged);
 
+  // Dates before anything else touches the digits: a day is an ordinal and so
+  // is a year, and "28 августа 2026" read as cardinals is what made the
+  // assistant sound like a toy. Before the decimal rule too, which would
+  // otherwise read "28.08.2026" as a number with a fraction in it.
+  if (ru) out = spellDates(out);
+
   // Thousands separators first, so a grouped number is one quantity before
   // anything looks for a decimal point in it.
   for (let pass = 0; pass < 3; pass++) {
@@ -75,24 +83,39 @@ export function forVoice(text: string, lang: SpeechLang = "ru"): string {
   // The whole figure is captured, not its first digit: "$100" must not become
   // "1 долларов 00".
   const AMOUNT = String.raw`(\d+(?:[.,]\d+)?)`;
-  out = out
-    .replace(new RegExp(`\\$\\s?${AMOUNT}`, "g"), ru ? "$1 долларов" : "$1 dollars")
-    .replace(new RegExp(`€\\s?${AMOUNT}`, "g"), ru ? "$1 евро" : "$1 euros")
-    .replace(new RegExp(`₴\\s?${AMOUNT}`, "g"), ru ? "$1 гривен" : "$1 hryvnia")
-    .replace(new RegExp(`£\\s?${AMOUNT}`, "g"), ru ? "$1 фунтов" : "$1 pounds");
+
+  /**
+   * Replaces a symbol and its figure with the figure and the noun in the form
+   * that number requires: 1 доллар, 2 доллара, 5 долларов. Everything used to
+   * take the last of the three, which is wrong after most numbers.
+   */
+  const withUnit = (pattern: string, forms: NounForms, english: string) => {
+    out = out.replace(new RegExp(pattern, "g"), (_whole, amount: string) =>
+      ru ? `${amount} ${pluralRu(toNumber(amount), forms)}` : `${amount} ${english}`,
+    );
+  };
+
+  const DOLLARS: NounForms = ["доллар", "доллара", "долларов"];
+  const EUROS: NounForms = ["евро", "евро", "евро"];
+  const HRYVNIA: NounForms = ["гривна", "гривны", "гривен"];
+  const POUNDS: NounForms = ["фунт", "фунта", "фунтов"];
+  const DEGREES: NounForms = ["градус", "градуса", "градусов"];
+
+  withUnit(`\\$\\s?${AMOUNT}`, DOLLARS, "dollars");
+  withUnit(`€\\s?${AMOUNT}`, EUROS, "euros");
+  withUnit(`₴\\s?${AMOUNT}`, HRYVNIA, "hryvnia");
+  withUnit(`£\\s?${AMOUNT}`, POUNDS, "pounds");
 
   // And the same symbols written after the figure, which is how they appear in
   // Ukrainian and most European copy: "45,30 ₴".
-  out = out
-    .replace(new RegExp(`${AMOUNT}\\s?₴`, "g"), ru ? "$1 гривен" : "$1 hryvnia")
-    .replace(new RegExp(`${AMOUNT}\\s?€`, "g"), ru ? "$1 евро" : "$1 euros")
-    .replace(new RegExp(`${AMOUNT}\\s?\\$`, "g"), ru ? "$1 долларов" : "$1 dollars");
+  withUnit(`${AMOUNT}\\s?₴`, HRYVNIA, "hryvnia");
+  withUnit(`${AMOUNT}\\s?€`, EUROS, "euros");
+  withUnit(`${AMOUNT}\\s?\\$`, DOLLARS, "dollars");
 
   // A trailing symbol reads as its name, not its punctuation.
-  out = out
-    .replace(/(\d)\s?%/g, ru ? "$1 процентов" : "$1 percent")
-    .replace(/(\d)\s?°\s?[CС]/g, ru ? "$1 градусов" : "$1 degrees")
-    .replace(/(\d)\s?°/g, ru ? "$1 градусов" : "$1 degrees");
+  withUnit(`${AMOUNT}\\s?%`, ["процент", "процента", "процентов"], "percent");
+  withUnit(`${AMOUNT}\\s?°\\s?[CС]`, DEGREES, "degrees");
+  withUnit(`${AMOUNT}\\s?°`, DEGREES, "degrees");
 
   // Units written with a slash. "8 км/ч" was read as "восемь километров дробь
   // че" and "10 Мбит/с" the same way — the mark is shorthand on a screen and
@@ -114,6 +137,23 @@ export function forVoice(text: string, lang: SpeechLang = "ru"): string {
     .replace(/mb\s?\/\s?s/gi, ru ? "мегабит в секунду" : "megabits per second")
     .replace(/24\s?\/\s?7/g, ru ? "круглосуточно" : "around the clock")
     .replace(/и\s?\/\s?или/gi, "или");
+
+  // A clock time. "22:08" is read as "двадцать два ноль восемь" or worse, as
+  // the colon by name; said aloud it is hours and minutes, each agreeing with
+  // its own number.
+  if (ru) {
+    out = out.replace(/(\d{1,2}):(\d{2})(?::\d{2})?/g, (_whole, h: string, m: string) => {
+      const hours = Number(h);
+      const minutes = Number(m);
+      if (hours > 23 || minutes > 59) return _whole;
+      const hourWord = pluralRu(hours, ["час", "часа", "часов"]);
+      const minuteWord = pluralRu(minutes, ["минута", "минуты", "минут"]);
+      // A leading zero would otherwise be read out as the word "ноль".
+      return minutes === 0
+        ? `${hours} ${hourWord} ровно`
+        : `${hours} ${hourWord} ${minutes} ${minuteWord}`;
+    });
+  }
 
   // A dimension: "1920×1080" is two numbers with a word between them, not the
   // multiplication sign said by name.
@@ -165,34 +205,39 @@ function wordish(pattern: string): RegExp {
  * unambiguous on their own; the plain units are only expanded after a figure,
  * because "см" is as likely to be "смотри" as it is centimetres.
  */
-const SPOKEN_FORMS: Array<{ short: string; ru: string; en: string; needsNumber?: boolean }> = [
-  { short: String.raw`грн\.?`, ru: "гривен", en: "hryvnia" },
-  { short: String.raw`руб\.?`, ru: "рублей", en: "roubles" },
-  { short: String.raw`долл\.?`, ru: "долларов", en: "dollars" },
-  { short: String.raw`коп\.?`, ru: "копеек", en: "kopecks" },
-  { short: String.raw`тыс\.?`, ru: "тысяч", en: "thousand" },
-  { short: String.raw`млн\.?`, ru: "миллионов", en: "million" },
-  { short: String.raw`млрд\.?`, ru: "миллиардов", en: "billion" },
-  { short: String.raw`трлн\.?`, ru: "триллионов", en: "trillion" },
+const SPOKEN_FORMS: Array<{
+  short: string;
+  ru: string | NounForms;
+  en: string;
+  needsNumber?: boolean;
+}> = [
+  { short: String.raw`грн\.?`, ru: ["гривна", "гривны", "гривен"], en: "hryvnia" },
+  { short: String.raw`руб\.?`, ru: ["рубль", "рубля", "рублей"], en: "roubles" },
+  { short: String.raw`долл\.?`, ru: ["доллар", "доллара", "долларов"], en: "dollars" },
+  { short: String.raw`коп\.?`, ru: ["копейка", "копейки", "копеек"], en: "kopecks" },
+  { short: String.raw`тыс\.?`, ru: ["тысяча", "тысячи", "тысяч"], en: "thousand" },
+  { short: String.raw`млн\.?`, ru: ["миллион", "миллиона", "миллионов"], en: "million" },
+  { short: String.raw`млрд\.?`, ru: ["миллиард", "миллиарда", "миллиардов"], en: "billion" },
+  { short: String.raw`трлн\.?`, ru: ["триллион", "триллиона", "триллионов"], en: "trillion" },
   { short: String.raw`т\.\s?е\.`, ru: "то есть", en: "that is" },
   { short: String.raw`т\.\s?д\.`, ru: "так далее", en: "so on" },
   { short: String.raw`т\.\s?п\.`, ru: "тому подобное", en: "so forth" },
   { short: String.raw`др\.`, ru: "другие", en: "others" },
-  { short: "кг", ru: "килограммов", en: "kilograms", needsNumber: true },
-  { short: "км", ru: "километров", en: "kilometres", needsNumber: true },
-  { short: "см", ru: "сантиметров", en: "centimetres", needsNumber: true },
-  { short: "мм", ru: "миллиметров", en: "millimetres", needsNumber: true },
-  { short: String.raw`шт\.?`, ru: "штук", en: "pieces", needsNumber: true },
-  { short: String.raw`мин\.`, ru: "минут", en: "minutes", needsNumber: true },
-  { short: String.raw`сек\.`, ru: "секунд", en: "seconds", needsNumber: true },
-  { short: String.raw`ч\.`, ru: "часов", en: "hours", needsNumber: true },
+  { short: "кг", ru: ["килограмм", "килограмма", "килограммов"], en: "kilograms", needsNumber: true },
+  { short: "км", ru: ["километр", "километра", "километров"], en: "kilometres", needsNumber: true },
+  { short: "см", ru: ["сантиметр", "сантиметра", "сантиметров"], en: "centimetres", needsNumber: true },
+  { short: "мм", ru: ["миллиметр", "миллиметра", "миллиметров"], en: "millimetres", needsNumber: true },
+  { short: String.raw`шт\.?`, ru: ["штука", "штуки", "штук"], en: "pieces", needsNumber: true },
+  { short: String.raw`мин\.`, ru: ["минута", "минуты", "минут"], en: "minutes", needsNumber: true },
+  { short: String.raw`сек\.`, ru: ["секунда", "секунды", "секунд"], en: "seconds", needsNumber: true },
+  { short: String.raw`ч\.`, ru: ["час", "часа", "часов"], en: "hours", needsNumber: true },
   // Hardware shorthand the System module speaks. Left as letters a Russian
   // voice reads them one at a time, which is how "16 GB RAM" came out.
-  { short: "GB|ГБ", ru: "гигабайт", en: "gigabytes", needsNumber: true },
-  { short: "MB|МБ", ru: "мегабайт", en: "megabytes", needsNumber: true },
-  { short: "TB|ТБ", ru: "терабайт", en: "terabytes", needsNumber: true },
-  { short: "GHz|ГГц", ru: "гигагерц", en: "gigahertz", needsNumber: true },
-  { short: "MHz|МГц", ru: "мегагерц", en: "megahertz", needsNumber: true },
+  { short: "GB|ГБ", ru: ["гигабайт", "гигабайта", "гигабайт"], en: "gigabytes", needsNumber: true },
+  { short: "MB|МБ", ru: ["мегабайт", "мегабайта", "мегабайт"], en: "megabytes", needsNumber: true },
+  { short: "TB|ТБ", ru: ["терабайт", "терабайта", "терабайт"], en: "terabytes", needsNumber: true },
+  { short: "GHz|ГГц", ru: ["гигагерц", "гигагерца", "гигагерц"], en: "gigahertz", needsNumber: true },
+  { short: "MHz|МГц", ru: ["мегагерц", "мегагерца", "мегагерц"], en: "megahertz", needsNumber: true },
   { short: "RAM", ru: "оперативной памяти", en: "RAM" },
   { short: "fps|FPS", ru: "кадров в секунду", en: "frames per second" },
 ];
@@ -202,13 +247,117 @@ function expandAbbreviations(text: string, ru: boolean): string {
   for (const form of SPOKEN_FORMS) {
     const said = ru ? form.ru : form.en;
     if (form.needsNumber) {
+      // The figure decides which of the three forms the noun takes, so the
+      // replacement is a function rather than a fixed string: "1 километр",
+      // "2 километра", "5 километров".
       out = out.replace(
-        new RegExp(String.raw`(\d)\s?(?:${form.short})` + EDGE_AFTER, "giu"),
-        `$1 ${said}`,
+        new RegExp(String.raw`(\d+(?:[.,]\d+)?)\s?(?:${form.short})` + EDGE_AFTER, "giu"),
+        (_whole, amount: string) =>
+          `${amount} ${Array.isArray(said) ? pluralRu(toNumber(amount), said) : said}`,
       );
     } else {
-      out = out.replace(wordish(form.short), said);
+      // A figure in front still decides the form — "21 млн" is "миллион", not
+      // "миллионов". Only what is left standing alone falls back to the plural.
+      if (Array.isArray(said)) {
+        out = out.replace(
+          new RegExp(String.raw`(\d+(?:[.,]\d+)?)\s?(?:${form.short})` + EDGE_AFTER, "giu"),
+          (_whole, amount: string) => `${amount} ${pluralRu(toNumber(amount), said)}`,
+        );
+      }
+      out = out.replace(wordish(form.short), Array.isArray(said) ? said[2] : said);
     }
   }
   return out;
+}
+
+/** "44,57" as a number, so agreement can be decided from it. */
+function toNumber(amount: string): number {
+  return Number(amount.replace(",", "."));
+}
+
+/** Month names in the genitive, which is the form a date is spoken in. */
+const MONTHS_GENITIVE = [
+  "января",
+  "февраля",
+  "марта",
+  "апреля",
+  "мая",
+  "июня",
+  "июля",
+  "августа",
+  "сентября",
+  "октября",
+  "ноября",
+  "декабря",
+];
+
+/** Enough of each month to recognise whatever case it was written in. */
+const MONTH_STEMS = [
+  "январ",
+  "феврал",
+  "март",
+  "апрел",
+  "ма",
+  "июн",
+  "июл",
+  "август",
+  "сентябр",
+  "октябр",
+  "ноябр",
+  "декабр",
+];
+
+/**
+ * Dates, spoken the way a person says them.
+ *
+ * "28 августа 2026 года" is read by a synthesiser as "двадцать восемь августа
+ * две тысячи двадцать шесть" — cardinal where Russian requires an ordinal, in
+ * both halves. It is the single thing that made the voice sound unfinished.
+ */
+function spellDates(text: string): string {
+  let out = text;
+
+  // "28.08.2026" and "28/08/2026" — a written date, before any rule reads the
+  // dots as a decimal point.
+  out = out.replace(/(\d{1,2})[./](\d{1,2})[./](\d{4})/g, (whole, d, m, y) => {
+    const day = Number(d);
+    const month = Number(m);
+    const year = Number(y);
+    if (day < 1 || day > 31 || month < 1 || month > 12) return whole;
+    return `${dayOrdinal(day)} ${MONTHS_GENITIVE[month - 1]} ${yearOrdinal(year)} года`;
+  });
+
+  // "28 августа 2026 года" / "28 августа" — a day followed by a month name.
+  const monthPattern = MONTH_STEMS.join("|");
+  out = out.replace(
+    new RegExp(String.raw`(\d{1,2})\s+(${monthPattern})\S*`, "gi"),
+    (whole, d: string, stem: string) => {
+      const day = Number(d);
+      if (day < 1 || day > 31) return whole;
+      const index = MONTH_STEMS.findIndex((m) => m === stem.toLowerCase());
+      if (index < 0) return whole;
+      return `${dayOrdinal(day)} ${MONTHS_GENITIVE[index]}`;
+    },
+  );
+
+  // A year with the word that follows it deciding the case: "2026 года",
+  // "в 2026 году", "2026 год".
+  out = out
+    .replace(/(\d{4})\s+года/g, (whole, y) => yearWord(whole, Number(y), "genitive", "года"))
+    .replace(/(\d{4})\s+году/g, (whole, y) => yearWord(whole, Number(y), "prepositional", "году"))
+    .replace(/(\d{4})\s+год(?![а-яё])/gi, (whole, y) =>
+      yearWord(whole, Number(y), "nominative", "год"),
+    );
+
+  return out;
+}
+
+function yearWord(
+  whole: string,
+  year: number,
+  grammaticalCase: GrammaticalCase,
+  noun: string,
+): string {
+  if (year < 1900 || year > 2099) return whole;
+  return `${yearOrdinal(year, grammaticalCase)} ${noun}`;
 }
