@@ -5,12 +5,14 @@ import { useOrbitStore } from "@/stores/orbitStore";
 import { playBlip } from "@/audio/audioStore";
 import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes";
 import { matchIntent, replyFor } from "./commandEngine";
+import { bareWords, isEchoOfSpeech } from "./echo";
 import {
   speak,
   stopSpeaking,
   primeVoices,
   isSystemSpeaking,
-  spokenText,
+  recentSpokenText,
+  msSinceSpeechEnded,
   type SpeechLang,
 } from "./speech";
 import { runSearch, clearSearch } from "./searchStore";
@@ -55,31 +57,25 @@ const STOP_WORDS = [
   "тихо",
 ];
 
-function bareWords(raw: string): string[] {
-  return raw
-    .toLowerCase()
-    .replace(/[.,!?;:"'()]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-}
-
 function isStopCommand(raw: string): boolean {
   const words = bareWords(raw);
   return words.some((w) => STOP_WORDS.includes(w));
 }
 
 /**
- * True when what was heard is mostly the line being spoken right now — the
- * assistant's own voice returning through the microphone rather than the user.
- * Without this, its reply feeds itself and it talks in circles.
+ * A question is never accepted this soon after the voice stops. The recogniser
+ * withholds a final transcript until it hears a pause, so the tail of a reply
+ * arrives a second or two after the audio ended — by which time the assistant
+ * is no longer "speaking" and every guard keyed to that has already lifted.
  */
+const QUIET_AFTER_SPEECH_MS = 1800;
+
+/** Past this, a repeat is the user asking again, not an echo. */
+const ECHO_WINDOW_MS = 12_000;
+
+/** Its own voice returning through the microphone, rather than the user. */
 function isOwnEcho(raw: string): boolean {
-  const spoken = spokenText();
-  if (!spoken) return false;
-  const heard = bareWords(raw).filter((w) => w.length > 2);
-  if (!heard.length) return true;
-  const overlap = heard.filter((w) => spoken.includes(w)).length;
-  return overlap / heard.length > 0.6;
+  return isEchoOfSpeech(raw, recentSpokenText());
 }
 
 function describeError(code: string): string {
@@ -398,14 +394,22 @@ export function useVoiceCommands() {
           continue;
         }
 
+        const intent = matchIntent(text);
+
         if (speakingNow) {
-          // Its own voice coming back through the microphone: never act on it.
-          if (isOwnEcho(text)) continue;
           // A command said over the top is obeyed immediately — waiting for a
           // long reply to finish is what made the system feel dead. A question
           // is not: answering mid-answer is the loop that made it ramble.
-          if (!matchIntent(text)) continue;
+          if (!intent) continue;
+          // Even a command can be the assistant quoting itself.
+          if (isOwnEcho(text)) continue;
           stopSpeaking();
+        } else if (!intent) {
+          // A question, with the voice just stopped. The tail of what was said
+          // is still arriving; nothing said this soon is treated as a question.
+          const since = msSinceSpeechEnded();
+          if (since < QUIET_AFTER_SPEECH_MS) continue;
+          if (since < ECHO_WINDOW_MS && isOwnEcho(text)) continue;
         }
 
         setTranscript(text);

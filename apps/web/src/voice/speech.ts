@@ -177,19 +177,45 @@ export function isSystemSpeaking() {
 }
 
 /**
- * The last line handed to the voice, lowercased. The microphone picks up the
- * reply while it plays; comparing against this is how the caller tells the
- * assistant's own echo from the user actually talking over it.
+ * Everything said in the last minute, lowercased.
+ *
+ * A rolling window rather than the last line, because a recogniser does not
+ * hand over a final transcript until it hears a pause — which lands a second
+ * or two *after* the audio stopped, when the assistant is no longer speaking
+ * and the naive guard has already been lifted. That gap is how its own answer
+ * came back as a question and started a conversation with itself.
  */
-let lastSpoken = "";
-export function spokenText() {
-  return lastSpoken;
+let recentlySpoken: Array<{ text: string; at: number }> = [];
+const RECENT_WINDOW_MS = 60_000;
+
+function rememberSpoken(text: string) {
+  const now = Date.now();
+  recentlySpoken.push({ text: text.toLowerCase(), at: now });
+  recentlySpoken = recentlySpoken.filter((r) => now - r.at < RECENT_WINDOW_MS);
+}
+
+export function recentSpokenText(): string {
+  const now = Date.now();
+  return recentlySpoken
+    .filter((r) => now - r.at < RECENT_WINDOW_MS)
+    .map((r) => r.text)
+    .join(" ");
+}
+
+/** When the voice last fell silent. The tail of a sentence keeps arriving
+ *  through the microphone for a moment after this. */
+let speechEndedAt = 0;
+
+export function msSinceSpeechEnded(): number {
+  if (speaking) return 0;
+  return speechEndedAt ? Date.now() - speechEndedAt : Number.MAX_SAFE_INTEGER;
 }
 
 function markDone() {
   if (settleTimer) clearTimeout(settleTimer);
   settleTimer = setTimeout(() => {
     speaking = false;
+    speechEndedAt = Date.now();
   }, ECHO_TAIL_MS);
 }
 
@@ -311,7 +337,7 @@ async function drain() {
 
 /** Speaks one line and resolves when its audio has finished, not when it starts. */
 async function deliver(text: string, lang: SpeechLang, sequence: number): Promise<void> {
-  lastSpoken = text.toLowerCase();
+  rememberSpoken(text);
   const playedOnServer = await speakOnServer(text, sequence);
   if (sequence !== speechSequence) return;
   if (playedOnServer) {
@@ -372,13 +398,11 @@ function buildUtterance(text: string, lang: SpeechLang) {
 export function stopSpeaking() {
   speechSequence++;
   queue.length = 0;
-  lastSpoken = "";
+  // What was said is deliberately kept: the microphone is still carrying the
+  // tail of it, and that tail is exactly what must not be taken as a question.
   stopServerVoice();
-  if (!isSpeechSynthesisAvailable()) {
-    speaking = false;
-    return;
-  }
-  window.speechSynthesis.cancel();
   speaking = false;
+  speechEndedAt = Date.now();
   if (settleTimer) clearTimeout(settleTimer);
+  if (isSpeechSynthesisAvailable()) window.speechSynthesis.cancel();
 }
