@@ -119,3 +119,55 @@ describe("forVoice — signs the synthesiser would name", () => {
     expect(forVoice("Открываю Instagram")).toBe("Открываю Instagram");
   });
 });
+
+/**
+ * "44,57 грн" was read out as "грны". A synthesiser cannot guess a short form,
+ * and this is the class of problem, not one instance of it.
+ */
+describe("forVoice — abbreviations said in full", () => {
+  it("says currency short forms as words", () => {
+    expect(forVoice("Курс НБУ — 44,57 грн за доллар")).toBe(
+      "Курс НБУ, 44 и 57 гривен за доллар",
+    );
+    expect(forVoice("оборот 12 млн руб. в год")).toBe("оборот 12 миллионов рублей в год");
+    expect(forVoice("50 тыс. клиентов")).toBe("50 тысяч клиентов");
+  });
+
+  it("says hardware shorthand the System module speaks", () => {
+    expect(forVoice("8 ядер · 16 GB RAM")).toBe("8 ядер · 16 гигабайт оперативной памяти");
+    expect(forVoice("20 fps, экран 1920×1080")).toBe(
+      "20 кадров в секунду, экран 1920 на 1080",
+    );
+  });
+
+  it("expands a unit only when a figure precedes it", () => {
+    expect(forVoice("до объекта 3 км")).toBe("до объекта 3 километров");
+    // "см" on its own is as likely to be "смотри" as centimetres.
+    expect(forVoice("см выше")).toBe("см выше");
+    expect(forVoice("длина 7 см")).toBe("длина 7 сантиметров");
+  });
+
+  it("does not maul a word that merely starts with a short form", () => {
+    expect(forVoice("смотри внимательно")).toBe("смотри внимательно");
+    expect(forVoice("километровая очередь")).toBe("километровая очередь");
+    expect(forVoice("минимум усилий")).toBe("минимум усилий");
+  });
+
+  it("still handles the slash units first", () => {
+    expect(forVoice("ветер 8 км/ч")).toBe("ветер 8 километров в час");
+    expect(forVoice("Сеть 4g, 10 Мбит/с")).toBe("Сеть 4g, 10 мегабит в секунду");
+  });
+});
+
+describe("forVoice — a range is said with words", () => {
+  it("reads a price range as from-to, not as a list", () => {
+    expect(forVoice("покупают за 44,30–44,40 грн")).toBe(
+      "покупают за от 44 и 30 до 44 и 40 гривен",
+    );
+    expect(forVoice("сегодня от 12–22 градусов")).toBe("сегодня от 12 до 22 градусов");
+  });
+
+  it("leaves a dash between words as a pause", () => {
+    expect(forVoice("Курс НБУ — 44,57 грн")).toBe("Курс НБУ, 44 и 57 гривен");
+  });
+});
