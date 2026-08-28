@@ -14,8 +14,11 @@ export async function GET() {
     await warmUpSpeech();
     return NextResponse.json({ ready: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Warm-up failed.";
-    return NextResponse.json({ ready: false, reason: message }, { status: 503 });
+    // Piper's failures quote the paths it was given — the Python binary, the
+    // voice model, both under the operator's home folder. Those stay in the
+    // server log; the client is told only that it failed.
+    console.error("[speak] warm-up failed:", error);
+    return NextResponse.json({ ready: false, reason: "warm-up-failed" }, { status: 503 });
   }
 }
 
@@ -52,7 +55,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Synthesis failed.";
-    return NextResponse.json({ error: message }, { status: 503 });
+    console.error("[speak] synthesis failed:", error);
+    return NextResponse.json({ error: "Synthesis failed." }, { status: 503 });
   }
 }

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { streamChat, isLlmConfigured, type ChatMessage } from "@/server/llm";
+import { searchBrain } from "@/server/brain";
+import { moduleRegistry } from "@/modules/registry";
 
 export const runtime = "nodejs";
 
@@ -71,7 +73,6 @@ export async function POST(request: Request) {
   let history: ChatMessage[];
   let moduleContext: string | null;
   let lang: string;
-  let knowledge: string | null;
   let assistantName: string;
 
   try {
@@ -79,7 +80,6 @@ export async function POST(request: Request) {
       messages?: unknown;
       moduleContext?: unknown;
       lang?: unknown;
-      knowledge?: unknown;
       assistantName?: unknown;
     };
     const raw = Array.isArray(body.messages) ? body.messages : [];
@@ -94,11 +94,13 @@ export async function POST(request: Request) {
       })
       .slice(-MAX_HISTORY)
       .map((m) => ({ role: m.role, content: m.content.slice(0, MAX_MESSAGE_CHARS) }));
-    moduleContext = typeof body.moduleContext === "string" ? body.moduleContext : null;
-    lang = typeof body.lang === "string" ? body.lang : "ru";
-    // Capped: a long excerpt would crowd the question out of the context.
-    knowledge =
-      typeof body.knowledge === "string" ? body.knowledge.slice(0, MAX_KNOWLEDGE_CHARS) : null;
+    // Checked against the registry rather than trusted: this string is placed
+    // in the system prompt, and anything a caller can put there is an
+    // instruction to the model.
+    const claimedModule = typeof body.moduleContext === "string" ? body.moduleContext : null;
+    moduleContext =
+      claimedModule && moduleRegistry.some((m) => m.label === claimedModule) ? claimedModule : null;
+    lang = body.lang === "en" ? "en" : "ru";
     assistantName =
       typeof body.assistantName === "string" && body.assistantName.trim()
         ? body.assistantName.trim().slice(0, 40)
@@ -108,6 +110,19 @@ export async function POST(request: Request) {
   }
 
   if (!history.length) return NextResponse.json({ error: "Nothing to answer." }, { status: 400 });
+
+  // Notes are gathered here rather than accepted from the caller. The client
+  // cannot be allowed to choose what the model is told is in the user's own
+  // knowledge base, and gathering them here removes a round trip as well.
+  const question = history[history.length - 1]?.content ?? "";
+  const notes = await searchBrain(question).catch(() => []);
+  const knowledge = notes.length
+    ? notes
+        .slice(0, 3)
+        .map((note) => `# ${note.title}\n${note.excerpt}`)
+        .join("\n\n")
+        .slice(0, MAX_KNOWLEDGE_CHARS)
+    : null;
 
   const messages = [systemPrompt(moduleContext, lang, knowledge, assistantName), ...history];
   const encoder = new TextEncoder();
@@ -119,10 +134,12 @@ export async function POST(request: Request) {
           controller.enqueue(encoder.encode(piece));
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Model request failed.";
         // The stream has already started, so the failure has to travel inside
-        // it — a status code can no longer be changed at this point.
-        controller.enqueue(encoder.encode(`\n[error] ${message}`));
+        // it — a status code can no longer be changed at this point. The
+        // marker is stripped by the client before anything is spoken; the
+        // detail stays in the server log rather than being read aloud.
+        console.error("[chat] stream failed:", error);
+        controller.enqueue(encoder.encode(`\n[error]`));
       } finally {
         controller.close();
       }

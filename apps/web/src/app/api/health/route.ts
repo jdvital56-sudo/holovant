@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import os from "node:os";
 import { isPiperConfigured } from "@/server/piperVoice";
-import { isLlmConfigured, llmConfig } from "@/server/llm";
+import { isLlmConfigured } from "@/server/llm";
 
 export const runtime = "nodejs";
 
@@ -27,17 +27,35 @@ export interface ServerHealth {
 /** A health check that hangs is itself a failure, so each probe is capped. */
 const PROBE_TIMEOUT_MS = 4000;
 
+/** The System module polls this. Without a cache every poll is an outbound
+ *  request, which is both latency the user waits on and, once deployed, a way
+ *  to have the server generate traffic on someone's behalf. */
+const PROBE_CACHE_MS = 30_000;
+let weatherProbe: { at: number; result: ServiceHealth } | null = null;
+
 async function probeWeather(): Promise<ServiceHealth> {
+  if (weatherProbe && Date.now() - weatherProbe.at < PROBE_CACHE_MS) {
+    return weatherProbe.result;
+  }
   try {
     const response = await fetch(
       "https://api.open-meteo.com/v1/forecast?latitude=50.45&longitude=30.52&current=temperature_2m",
       { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) },
     );
-    return response.ok
+    const result: ServiceHealth = response.ok
       ? { id: "weather", label: "Weather", state: "ok", detail: "Open-Meteo responding" }
       : { id: "weather", label: "Weather", state: "failing", detail: `HTTP ${response.status}` };
+    weatherProbe = { at: Date.now(), result };
+    return result;
   } catch {
-    return { id: "weather", label: "Weather", state: "failing", detail: "Not reachable" };
+    const result: ServiceHealth = {
+      id: "weather",
+      label: "Weather",
+      state: "failing",
+      detail: "Not reachable",
+    };
+    weatherProbe = { at: Date.now(), result };
+    return result;
   }
 }
 
@@ -68,7 +86,7 @@ export async function GET() {
           detail: "Using the browser voice — set HOLOVANT_PIPER_* for the product voice",
         },
     isLlmConfigured()
-      ? { id: "assistant", label: "Assistant", state: "ok", detail: `Model ${llmConfig().model}` }
+      ? { id: "assistant", label: "Assistant", state: "ok", detail: "Model configured" }
       : {
           id: "assistant",
           label: "Assistant",
@@ -84,7 +102,10 @@ export async function GET() {
   const health: ServerHealth = {
     services,
     host: {
-      platform: `${os.type()} ${os.release()}`,
+      // The OS family without its exact release: the System module shows the
+      // user which machine they are on, and a patch level tells a stranger
+      // which vulnerabilities to try.
+      platform: os.type(),
       cpuCount: os.cpus().length,
       loadPct: loadPct(),
       memoryUsedPct: memoryUsedPct(),

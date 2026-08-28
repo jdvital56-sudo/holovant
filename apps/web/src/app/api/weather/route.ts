@@ -28,8 +28,8 @@ interface GeoResult {
   country?: string;
 }
 
-async function resolvePlace(query: string): Promise<GeoResult | null> {
-  const url = `${GEO_URL}?name=${encodeURIComponent(query)}&count=1&language=ru&format=json`;
+async function resolvePlace(query: string, lang: "ru" | "en"): Promise<GeoResult | null> {
+  const url = `${GEO_URL}?name=${encodeURIComponent(query)}&count=1&language=${lang}&format=json`;
   const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
   if (!response.ok) return null;
   const payload = (await response.json()) as { results?: GeoResult[] };
@@ -39,14 +39,17 @@ async function resolvePlace(query: string): Promise<GeoResult | null> {
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const place = params.get("place")?.trim();
+  const lang = params.get("lang") === "en" ? "en" : "ru";
   let latitude = Number(params.get("lat"));
   let longitude = Number(params.get("lon"));
   let placeName = place ?? "";
 
   try {
     if (place) {
-      const geo = await resolvePlace(place);
-      if (!geo?.latitude || !geo.longitude) {
+      const geo = await resolvePlace(place, lang);
+      // Compared against null, not truthiness: the equator and the Greenwich
+      // meridian are zero, and a falsy check rejects every place on them.
+      if (geo?.latitude == null || geo.longitude == null) {
         return NextResponse.json({ error: `Could not find “${place}”.` }, { status: 404 });
       }
       latitude = geo.latitude;
@@ -56,6 +59,12 @@ export async function GET(request: Request) {
 
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       return NextResponse.json({ error: "No location given." }, { status: 400 });
+    }
+
+    // Out-of-range coordinates would otherwise travel to the provider and come
+    // back as an opaque 502, which reads as "the weather service is down".
+    if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+      return NextResponse.json({ error: "Coordinates out of range." }, { status: 400 });
     }
 
     const url =

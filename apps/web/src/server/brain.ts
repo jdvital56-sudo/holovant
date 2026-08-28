@@ -138,6 +138,81 @@ function scoreNote(title: string, text: string, terms: string[]): number {
   return score;
 }
 
+interface IndexedNote {
+  path: string;
+  title: string;
+  text: string;
+  mtimeMs: number;
+}
+
+/**
+ * Notes are read once and kept in memory, keyed by path with the modification
+ * time beside them. Without this, every single question walks the whole vault
+ * and re-reads every file from disk — fine for a folder of a hundred notes,
+ * seconds of latency on a real one.
+ *
+ * Held on `globalThis` so a hot reload in development does not discard it and
+ * quietly re-read the vault on the next question.
+ */
+const globalCache = globalThis as typeof globalThis & {
+  __holovantBrainIndex?: Map<string, IndexedNote>;
+  __holovantBrainScanAt?: number;
+};
+
+/** How long a directory listing is trusted before the vault is walked again. */
+const RESCAN_AFTER_MS = 30_000;
+
+async function loadIndex(root: string): Promise<IndexedNote[]> {
+  const cache = (globalCache.__holovantBrainIndex ??= new Map());
+  const lastScan = globalCache.__holovantBrainScanAt ?? 0;
+  const now = Date.now();
+
+  // A new file only appears after a rescan; an edited one is caught by mtime
+  // on every call, which is the case that actually matters in use.
+  const stale = now - lastScan > RESCAN_AFTER_MS;
+  const files = stale || cache.size === 0 ? await collectMarkdown(root) : [...cache.keys()];
+  if (stale) globalCache.__holovantBrainScanAt = now;
+
+  const notes: IndexedNote[] = [];
+  const seen = new Set<string>();
+
+  for (const file of files) {
+    seen.add(file);
+    try {
+      const info = await stat(file);
+      if (info.size > MAX_FILE_BYTES) continue;
+
+      const cached = cache.get(file);
+      if (cached && cached.mtimeMs === info.mtimeMs) {
+        notes.push(cached);
+        continue;
+      }
+
+      const raw = await readFile(file, "utf-8");
+      if (isAgentMemory(raw)) {
+        cache.delete(file);
+        continue;
+      }
+      const entry: IndexedNote = {
+        path: relative(root, file).split(sep).join("/"),
+        title: titleFrom(raw, file),
+        text: toPlainText(raw),
+        mtimeMs: info.mtimeMs,
+      };
+      cache.set(file, entry);
+      notes.push(entry);
+    } catch {
+      // Deleted or unreadable since the listing: drop it and carry on.
+      cache.delete(file);
+    }
+  }
+
+  // Anything the rescan no longer sees has been deleted or renamed.
+  if (stale) for (const key of cache.keys()) if (!seen.has(key)) cache.delete(key);
+
+  return notes;
+}
+
 export async function searchBrain(query: string, limit = 5): Promise<BrainNote[]> {
   const root = brainRoot();
   if (!root) return [];
@@ -149,28 +224,18 @@ export async function searchBrain(query: string, limit = 5): Promise<BrainNote[]
     .filter((t) => t.length >= 3);
   if (!terms.length) return [];
 
-  const files = await collectMarkdown(root);
+  const notes = await loadIndex(root);
   const scored: BrainNote[] = [];
 
-  for (const file of files) {
-    try {
-      const info = await stat(file);
-      if (info.size > MAX_FILE_BYTES) continue;
-      const raw = await readFile(file, "utf-8");
-      if (isAgentMemory(raw)) continue;
-      const text = toPlainText(raw);
-      const title = titleFrom(raw, file);
-      const score = scoreNote(title, text, terms);
-      if (score <= 0) continue;
-      scored.push({
-        path: relative(root, file).split(sep).join("/"),
-        title,
-        excerpt: excerptAround(text, terms),
-        score,
-      });
-    } catch {
-      // One unreadable note must not fail the search.
-    }
+  for (const note of notes) {
+    const score = scoreNote(note.title, note.text, terms);
+    if (score <= 0) continue;
+    scored.push({
+      path: note.path,
+      title: note.title,
+      excerpt: excerptAround(note.text, terms),
+      score,
+    });
   }
 
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);

@@ -51,17 +51,10 @@ export async function askAssistant(question: string, moduleContext: string | nul
   const requestId = ++activeRequest;
   const history = [...useChatStore.getState().history, { role: "user" as const, content: question }];
 
-  // Notes are looked up before the model is asked, so an answer about the
-  // user's own work is grounded in what they wrote rather than invented. When
-  // no knowledge base is connected this simply finds nothing and the assistant
-  // answers as it did before.
-  const notes = await searchBrain(question).catch(() => []);
-  const knowledge = notes.length
-    ? notes
-        .slice(0, 3)
-        .map((note) => `# ${note.title}\n${note.excerpt}`)
-        .join("\n\n")
-    : null;
+  // The notes themselves are gathered server-side inside /api/chat — what the
+  // model is told is in the user's knowledge base is not the client's to
+  // choose. This call only lights up the Brain panel with what was consulted.
+  void searchBrain(question).catch(() => []);
 
   useChatStore.setState({
     status: "thinking",
@@ -78,7 +71,6 @@ export async function askAssistant(question: string, moduleContext: string | nul
         messages: history,
         moduleContext,
         lang,
-        knowledge,
         assistantName: ASSISTANT_NAME,
       }),
     });
@@ -110,6 +102,14 @@ export async function askAssistant(question: string, moduleContext: string | nul
       if (requestId !== activeRequest) return; // A newer question replaced this one.
 
       const piece = decoder.decode(value, { stream: true });
+
+      // The server marks a mid-stream failure inline, because the status code
+      // is already sent by then. Without this the marker is read aloud, and
+      // the synthesiser pronounces the brackets.
+      if ((full + piece).includes("[error]")) {
+        throw new Error("Stream failed mid-answer.");
+      }
+
       full += piece;
       unspoken += piece;
       useChatStore.setState({ partial: full });
