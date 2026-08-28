@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { streamChat, isLlmConfigured, type ChatMessage } from "@/server/llm";
+import { toolsFor } from "@/server/tools";
 import { searchBrain } from "@/server/brain";
 import { moduleRegistry } from "@/modules/registry";
 
@@ -45,7 +46,20 @@ function systemPrompt(
       "Your answers are spoken aloud, so keep them short: two or three sentences unless asked for more.",
       "Never use markdown, bullet points, headings or emoji — none of it can be spoken.",
       "Give a direct answer first. Advise rather than list options.",
+      // It was refusing to tell a joke on the grounds of being a serious
+      // adviser. Expertise is what it brings to hard questions, not a reason
+      // to lecture someone who asked for something light.
+      "Being an expert does not make you stiff: answer casual and personal requests as a person would,",
+      "without explaining that you are an assistant or what your purpose is.",
       "If you do not know something, say so in one sentence instead of guessing — a confident wrong answer costs the user more than an admission.",
+      // Without this the model answers from training data and calls it current.
+      // It has tools; the failure mode to guard against is not using them.
+      "You have tools: web search, weather, the current time, and the user's notes.",
+      "Use them rather than answering from memory whenever the answer could have changed since you were trained —",
+      "prices, news, scores, schedules, anything about this week, and anything about the user's own work.",
+      "Never say you have no access to the internet: you do, through web_search. Check first, then answer.",
+      "Call get_current_time before any answer that depends on what day it is.",
+      "State the fact you found, not the fact that you searched.",
       context,
       language,
       knowledge
@@ -130,7 +144,9 @@ export async function POST(request: Request) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const piece of streamChat(messages)) {
+        for await (const piece of streamChat(messages, {
+          tools: toolsFor(lang === "en" ? "en" : "ru"),
+        })) {
           controller.enqueue(encoder.encode(piece));
         }
       } catch (error) {

@@ -8,9 +8,19 @@
  * this year.
  */
 
+import { runTool, type ToolDefinition } from "./tools";
+
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
 export interface ChatMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
 }
 
 /** DeepSeek by default: it is inexpensive, fast, and already in use here. */
@@ -19,6 +29,13 @@ const DEFAULT_MODEL = "deepseek-chat";
 
 /** A spoken answer that takes longer than this has stopped being a conversation. */
 const REQUEST_TIMEOUT_MS = 30000;
+
+/**
+ * How many times the model may call tools before it must answer. Three covers
+ * "check the date, then search, then answer"; more than that and it is looping
+ * rather than working, and the user is listening to silence.
+ */
+const MAX_TOOL_ROUNDS = 3;
 
 export function llmConfig() {
   return {
@@ -32,30 +49,51 @@ export function isLlmConfigured(): boolean {
   return Boolean(llmConfig().apiKey);
 }
 
+interface StreamDelta {
+  content?: string;
+  tool_calls?: Array<{
+    index: number;
+    id?: string;
+    type?: "function";
+    function?: { name?: string; arguments?: string };
+  }>;
+}
+
 interface StreamChunk {
-  choices?: Array<{ delta?: { content?: string } }>;
+  choices?: Array<{ delta?: StreamDelta; finish_reason?: string }>;
+}
+
+/** What one pass over the model produced: text for the user, or tools to run. */
+interface PassResult {
+  toolCalls: ToolCall[];
+  finishReason: string | null;
 }
 
 /**
- * Yields the answer as it arrives rather than when it is finished, so speech
- * can begin on the first complete sentence instead of after the last word.
+ * One request to the model. Text deltas are yielded as they arrive; tool calls
+ * are accumulated instead, because a tool call is not something to read out.
  */
-export async function* streamChat(
+async function* runPass(
   messages: ChatMessage[],
-  signal?: AbortSignal,
+  tools: ToolDefinition[] | undefined,
+  signal: AbortSignal | undefined,
+  collected: PassResult,
 ): AsyncGenerator<string> {
   const { baseUrl, apiKey, model } = llmConfig();
-  if (!apiKey) throw new Error("No language model is configured.");
 
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    // Low temperature and a tight ceiling: answers are spoken aloud and should
-    // be two or three sentences, not an essay that wanders.
-    body: JSON.stringify({ model, messages, stream: true, temperature: 0.4, max_tokens: 320 }),
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: true,
+      // Low temperature and a tight ceiling: answers are spoken aloud and
+      // should be two or three sentences, not an essay that wanders.
+      temperature: 0.4,
+      max_tokens: 320,
+      ...(tools?.length ? { tools, tool_choice: "auto" } : {}),
+    }),
     signal: signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
@@ -67,6 +105,8 @@ export async function* streamChat(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  /** Fragments arrive split across chunks and are joined by index. */
+  const building = new Map<number, ToolCall>();
 
   while (true) {
     const { done, value } = await reader.read();
@@ -82,14 +122,80 @@ export async function* streamChat(
       const trimmed = line.trim();
       if (!trimmed.startsWith("data:")) continue;
       const payload = trimmed.slice(5).trim();
-      if (payload === "[DONE]") return;
+      if (payload === "[DONE]") {
+        collected.toolCalls = [...building.values()];
+        return;
+      }
       try {
         const chunk = JSON.parse(payload) as StreamChunk;
-        const text = chunk.choices?.[0]?.delta?.content;
-        if (text) yield text;
+        const choice = chunk.choices?.[0];
+        if (choice?.finish_reason) collected.finishReason = choice.finish_reason;
+
+        const delta = choice?.delta;
+        if (delta?.content) yield delta.content;
+
+        for (const part of delta?.tool_calls ?? []) {
+          const existing = building.get(part.index) ?? {
+            id: "",
+            type: "function" as const,
+            function: { name: "", arguments: "" },
+          };
+          if (part.id) existing.id = part.id;
+          if (part.function?.name) existing.function.name += part.function.name;
+          if (part.function?.arguments) existing.function.arguments += part.function.arguments;
+          building.set(part.index, existing);
+        }
       } catch {
         // A malformed chunk is not worth ending a good answer over.
       }
+    }
+  }
+
+  collected.toolCalls = [...building.values()];
+}
+
+/**
+ * Yields the answer as it arrives rather than when it is finished, so speech
+ * can begin on the first complete sentence instead of after the last word.
+ *
+ * When tools are given, the model may ask for one before answering. Those
+ * rounds produce no text — the user hears nothing until the real answer
+ * starts, which is why the number of them is capped.
+ */
+export async function* streamChat(
+  messages: ChatMessage[],
+  options: { tools?: ToolDefinition[]; signal?: AbortSignal } = {},
+): AsyncGenerator<string> {
+  const { apiKey } = llmConfig();
+  if (!apiKey) throw new Error("No language model is configured.");
+
+  const conversation = [...messages];
+
+  for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+    const collected: PassResult = { toolCalls: [], finishReason: null };
+    // On the last permitted round the tools are withheld, which forces an
+    // answer instead of a fourth request for one.
+    const tools = round < MAX_TOOL_ROUNDS ? options.tools : undefined;
+
+    let sawText = false;
+    for await (const piece of runPass(conversation, tools, options.signal, collected)) {
+      sawText = true;
+      yield piece;
+    }
+
+    if (!collected.toolCalls.length) return;
+
+    // Text and a tool call in the same turn: the text has already been spoken,
+    // so running the tool would answer a question the user has heard answered.
+    if (sawText) return;
+
+    conversation.push({ role: "assistant", content: "", tool_calls: collected.toolCalls });
+
+    // Sequential rather than parallel: these are one or two cheap calls, and
+    // ordering keeps the transcript readable when something goes wrong.
+    for (const call of collected.toolCalls) {
+      const result = await runTool(call.function.name, call.function.arguments);
+      conversation.push({ role: "tool", tool_call_id: call.id, content: result });
     }
   }
 }
