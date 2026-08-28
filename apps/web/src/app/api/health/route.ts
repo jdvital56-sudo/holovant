@@ -6,7 +6,7 @@ import { isLlmConfigured } from "@/server/llm";
 export const runtime = "nodejs";
 
 export interface ServiceHealth {
-  id: "voice" | "assistant" | "search" | "weather";
+  id: "voice" | "assistant" | "search" | "music" | "weather";
   label: string;
   /** `ok` means reachable, not merely configured — the difference matters. */
   state: "ok" | "missing" | "failing";
@@ -96,6 +96,17 @@ export async function GET() {
     process.env.FIRECRAWL_API_KEY
       ? { id: "search", label: "Web search", state: "ok", detail: "Key present" }
       : { id: "search", label: "Web search", state: "missing", detail: "No key — search is off" },
+    // Not merely cosmetic: without a key the lookup falls back to reading
+    // YouTube's results page, which works but is against their terms. Showing
+    // which path is live is the difference between knowing and assuming.
+    process.env.YOUTUBE_API_KEY
+      ? { id: "music", label: "Music", state: "ok", detail: "YouTube Data API" }
+      : {
+          id: "music",
+          label: "Music",
+          state: "missing",
+          detail: "No key — falling back to page scraping",
+        },
     await probeWeather(),
   ];
 
