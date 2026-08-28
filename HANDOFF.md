@@ -10,10 +10,10 @@ cd apps/web
 pnpm dev
 ```
 
-Port 3000. Configuration lives in `apps/web/.env.local`, which is git-ignored
-and holds the DeepSeek key, the Piper voice paths, and the notes folder. It is
-absent on a fresh clone, and every feature behind it degrades honestly rather
-than failing: no key means the assistant says so out loud.
+Port 3000. Configuration lives in `apps/web/.env.local`, which is git-ignored;
+`README.md` lists every variable and what each one turns on. The file is absent
+on a fresh clone, and every feature behind it degrades honestly rather than
+failing: no key means the assistant says so out loud.
 
 Checks before committing: `pnpm --filter web typecheck`, `... lint`,
 `... test`. Lint is slow — allow two or three minutes.
@@ -32,12 +32,20 @@ Checks before committing: `pnpm --filter web typecheck`, `... lint`,
 - Voice commands: open a module, rotate, close, search the web, play music,
   save and replay favourite tracks, volume up and down, dismiss the chat or the
   player, wake on the assistant's name, show and hide the face
-- Second brain: a folder of Markdown, consulted on every question. Empty for a
-  customer until they connect their own
+- The assistant has tools and uses them: web search, weather, the current time,
+  and the user's own notes. It called none of these until 28 Aug and therefore
+  answered questions about today from training data, or said it had no internet
+  access — which was true of the model and false of the product
+- Second brain: a folder of Markdown, indexed in memory and re-read by
+  modification time. Empty for a customer until they connect their own
 - Web search (Firecrawl), weather (Open-Meteo, no key), a real system check
+- Music through the YouTube Data API when `YOUTUBE_API_KEY` is set, cached for
+  a day; falls back to reading the results page when it is not
+- A perimeter on `/api/*`: rate limit always, plus a shared token enforced only
+  when `HOLOVANT_ACCESS_TOKEN` is set
 - Several accounts per social module, combined by default
 - Hand tracking, pinch to freeze the scene
-- 52 tests; lint and types clean
+- 58 tests; lint and types clean; CI runs all three on every push
 
 ## What is not built
 
@@ -60,6 +68,23 @@ length of a reply, which reads as a freeze. The settled rule, in
 mostly overlaps the line being spoken is discarded as echo; a *command* said
 over a reply cuts it off and runs; a *question* said over a reply is dropped.
 
+**Do not add a guard that compares a question to the previous answer.** One
+lived here, meant to catch the assistant's voice echoing back, and it discarded
+follow-ups instead: ask about the exchange rate, hear the rate, ask again, and
+every word of the second question appears in the first answer. It was dropped
+in silence, which looks exactly like a system that has stopped working. Echo is
+handled at the recogniser, which is the only place it can be told apart.
+
+**Figures are rewritten before they are spoken.** A synthesiser reads "44.48"
+as "сорок четыре точка сорок восемь" and "$80,270" beginning with the name of
+the dollar sign. `forVoice` resolves separators and symbols into words; the
+panel keeps the original, which is what reads correctly on a screen.
+
+**What the model is told is in the user's notes is not the client's to send.**
+`/api/chat` looks them up itself. It also checks the language and module
+context against the registry: anything a caller can put in the system prompt is
+an instruction to the model.
+
 **A failed command must not reach the model.** Asked to stop the music by a
 phrase the matcher missed, the model will say the music has stopped. It has
 not. Phrases that mean stop are caught before the matcher when something is
@@ -69,9 +94,12 @@ answered "не понял команду".
 **Voice commands match word stems, not whole words.** Russian inflects, and
 commands are spoken in the accusative — "включи музыку", not "музыка".
 
-**Music search goes through YouTube's results page**, not the general web
-search: the latter returns watch links only for the most literal titles, so
-every artist name came back as nothing found.
+**Music goes through the YouTube Data API, and never the general web search.**
+The web search returns watch links only for the most literal titles, so every
+artist name came back as nothing found. Reading the results page works and is
+against YouTube's terms; it stays only as the fallback for an install with no
+`YOUTUBE_API_KEY`. A search costs 100 of the 10,000 free daily units, hence the
+day-long cache.
 
 **A browser will not open tabs or start audible sound without a click.** A
 spoken command is not a click. This is why the player is embedded.
