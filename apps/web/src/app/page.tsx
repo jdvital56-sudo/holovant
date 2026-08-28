@@ -5,6 +5,7 @@ import { SearchResults } from "@/hud/SearchResults";
 import { AssistantAnswer } from "@/hud/AssistantAnswer";
 import { NowPlaying } from "@/hud/NowPlaying";
 import { VitaFaceVideo } from "@/hud/VitaFaceVideo";
+import { ActionTrail } from "@/hud/ActionTrail";
 
 export default function Home() {
   return (
@@ -16,6 +17,7 @@ export default function Home() {
       <SearchResults />
       <AssistantAnswer />
       <NowPlaying />
+      <ActionTrail />
       <div className="fixed top-4 sm:top-8 left-1/2 -translate-x-1/2 z-10 pointer-events-none text-center">
         <div className="text-xs tracking-[0.3em] font-semibold text-frost">HOLOVANT</div>
       </div>

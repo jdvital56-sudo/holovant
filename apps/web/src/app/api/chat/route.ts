@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { streamChat, isLlmConfigured, type ChatMessage } from "@/server/llm";
-import { toolsFor } from "@/server/tools";
+import { toolsFor, actionToolsFor } from "@/server/tools";
 import { searchBrain } from "@/server/brain";
 import { moduleRegistry } from "@/modules/registry";
 
@@ -60,6 +60,20 @@ function systemPrompt(
       "Never say you have no access to the internet: you do, through web_search. Check first, then answer.",
       "Call get_current_time before any answer that depends on what day it is.",
       "State the fact you found, not the fact that you searched.",
+      // Hands, not only a mouth. It has tools that change what is on screen,
+      // and the failure to guard against is describing an action instead of
+      // taking it.
+      "You can also act: open a module, play or pause music, play a saved collection, save the",
+      "track playing, open a web page, change the volume, show or hide your face.",
+      "When the user asks for something you can do, do it — do not explain how they could do it.",
+      // It said "открываю сайт" and opened nothing. Saying it is the promise;
+      // the tool call is the only thing that keeps it.
+      "Never write that you are opening, playing, pausing or saving something unless you called",
+      "the tool for it in this same turn. Describing an action instead of taking it is the one",
+      "thing you must not do: the user has no way to tell the difference until it fails them.",
+      "Asked to open a site or a page you found, call open_site with the full https address.",
+      "Reading an address out loud is not opening it.",
+      "Say what you did in one short sentence.",
       context,
       language,
       knowledge
@@ -145,7 +159,10 @@ export async function POST(request: Request) {
     async start(controller) {
       try {
         for await (const piece of streamChat(messages, {
-          tools: toolsFor(lang === "en" ? "en" : "ru"),
+          tools: [
+            ...toolsFor(lang === "en" ? "en" : "ru"),
+            ...actionToolsFor(moduleRegistry.map((m) => m.id)),
+          ],
         })) {
           controller.enqueue(encoder.encode(piece));
         }

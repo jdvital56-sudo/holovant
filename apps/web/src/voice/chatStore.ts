@@ -3,6 +3,8 @@ import { speak, speakQueued } from "./speech";
 import { searchBrain } from "@/modules/brain/brainStore";
 import { ASSISTANT_NAME } from "@/config/assistant";
 import { TOOL_MARKER } from "@/server/toolMarker";
+import { extractActions } from "@/server/actionTypes";
+import { runAction } from "./actionRunner";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -95,6 +97,8 @@ export async function askAssistant(question: string, moduleContext: string | nul
     let full = "";
     let unspoken = "";
     let acknowledged = false;
+    /** Half an action envelope, split across two chunks of the stream. */
+    let pendingEnvelope = "";
 
     useChatStore.setState({ status: "streaming" });
 
@@ -103,7 +107,16 @@ export async function askAssistant(question: string, moduleContext: string | nul
       if (done) break;
       if (requestId !== activeRequest) return; // A newer question replaced this one.
 
-      let piece = decoder.decode(value, { stream: true });
+      let piece = pendingEnvelope + decoder.decode(value, { stream: true });
+      pendingEnvelope = "";
+
+      // Anything the assistant decided to do arrives inside the stream, and is
+      // carried out here — the interface is in the browser, so this is the only
+      // place it can happen. The envelopes never reach the panel or the voice.
+      const extracted = extractActions(piece);
+      piece = extracted.text;
+      pendingEnvelope = extracted.pending;
+      for (const queued of extracted.actions) runAction(queued);
 
       // The model has reached for a tool and the answer is seconds away. Say
       // so, once, rather than leaving the user listening to silence and

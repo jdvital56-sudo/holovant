@@ -14,6 +14,7 @@
 import { searchWeb, isSearchConfigured } from "./webSearch";
 import { fetchWeather } from "./weather";
 import { searchBrain, isBrainConnected } from "./brain";
+import { isSafeUrl, type QueuedAction } from "./actionTypes";
 
 export interface ToolDefinition {
   type: "function";
@@ -194,5 +195,224 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
     // The detail belongs in the log; the model gets something it can say.
     console.error(`[tools] ${name} failed:`, error);
     return `That check failed and could not be completed.`;
+  }
+}
+
+/**
+ * The tools that act rather than look something up.
+ *
+ * These are not run here. The interface lives in the browser, so the server
+ * decides on the action, hands back a line saying it is under way, and the
+ * action itself travels down the stream to be carried out where the buttons
+ * are. One direction only: the model does not wait for a result, because a
+ * round trip through the browser to report "the module opened" would cost the
+ * user seconds to learn something they can see.
+ */
+export function actionToolsFor(moduleIds: string[]): ToolDefinition[] {
+  return [
+    {
+      type: "function",
+      function: {
+        name: "open_module",
+        description:
+          "Open one of the interface's modules on screen. Use whenever the user asks to see, " +
+          "open or switch to something, or when showing it answers them better than describing it.",
+        parameters: {
+          type: "object",
+          properties: {
+            module: { type: "string", enum: moduleIds, description: "Which module to open." },
+          },
+          required: ["module"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "play_music",
+        description:
+          "Find a track and start it. Use when the user asks for music, an artist or a song.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Artist and title. Empty for background music with nothing specified.",
+            },
+          },
+          required: ["query"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "pause_music",
+        description: "Pause whatever is playing, keeping the track loaded.",
+        parameters: { type: "object", properties: {} },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "resume_music",
+        description: "Resume a paused track.",
+        parameters: { type: "object", properties: {} },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "play_collection",
+        description:
+          "Play from one of the user's saved collections of music. Omit the name for the default one.",
+        parameters: {
+          type: "object",
+          properties: { name: { type: "string", description: "Collection name, if they named one." } },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "save_track",
+        description: "Save the track playing now into a collection, creating it if it is new.",
+        parameters: {
+          type: "object",
+          properties: { collection: { type: "string", description: "Collection name." } },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "open_site",
+        description:
+          "Open a web page in a new tab. Use after a search when the user wants to go to a " +
+          "result, or when they name a site to visit. Give the full https address.",
+        parameters: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "Full https address." },
+            title: { type: "string", description: "What the page is, for the user to see." },
+          },
+          required: ["url"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "set_volume",
+        description: "Make the sound louder or quieter.",
+        parameters: {
+          type: "object",
+          properties: { direction: { type: "string", enum: ["up", "down"] } },
+          required: ["direction"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "show_face",
+        description: "Show the assistant's face on screen. Only when asked to appear.",
+        parameters: { type: "object", properties: {} },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "hide_face",
+        description: "Hide the assistant's face and return the dashboard.",
+        parameters: { type: "object", properties: {} },
+      },
+    },
+  ];
+}
+
+const ACTION_NAMES = new Set<string>([
+  "open_module",
+  "play_music",
+  "pause_music",
+  "resume_music",
+  "play_collection",
+  "save_track",
+  "open_site",
+  "set_volume",
+  "show_face",
+  "hide_face",
+]);
+
+export function isActionTool(name: string): boolean {
+  return ACTION_NAMES.has(name);
+}
+
+/**
+ * Turns a tool call into an action for the browser, and the sentence the model
+ * should carry on from. Returns null when the call cannot be honoured, so the
+ * model is told rather than the user being promised something that did not
+ * happen.
+ */
+export function planAction(
+  name: string,
+  rawArgs: string,
+): { action: QueuedAction; note: string } | null {
+  let args: Record<string, unknown> = {};
+  try {
+    args = rawArgs ? (JSON.parse(rawArgs) as Record<string, unknown>) : {};
+  } catch {
+    return null;
+  }
+
+  const text = (key: string): string => (typeof args[key] === "string" ? (args[key] as string) : "");
+
+  switch (name) {
+    case "open_module":
+      if (!text("module")) return null;
+      return {
+        action: { action: "open_module", args: { module: text("module") } },
+        note: `Opening the ${text("module")} module now.`,
+      };
+    case "play_music":
+      return {
+        action: { action: "play_music", args: { query: text("query") } },
+        note: text("query") ? `Starting ${text("query")}.` : "Starting some music.",
+      };
+    case "pause_music":
+      return { action: { action: "pause_music", args: {} }, note: "Paused." };
+    case "resume_music":
+      return { action: { action: "resume_music", args: {} }, note: "Resumed." };
+    case "play_collection":
+      return {
+        action: { action: "play_collection", args: { name: text("name") } },
+        note: text("name") ? `Playing the ${text("name")} collection.` : "Playing the saved music.",
+      };
+    case "save_track":
+      return {
+        action: { action: "save_track", args: { collection: text("collection") } },
+        note: "Saving the track that is playing.",
+      };
+    case "open_site": {
+      const url = text("url");
+      if (!isSafeUrl(url)) return null;
+      return {
+        action: { action: "open_site", args: { url, title: text("title") } },
+        note: `Opening ${text("title") || url}.`,
+      };
+    }
+    case "set_volume": {
+      const direction = text("direction") === "down" ? "down" : "up";
+      return {
+        action: { action: "set_volume", args: { direction } },
+        note: direction === "up" ? "Turning it up." : "Turning it down.",
+      };
+    }
+    case "show_face":
+      return { action: { action: "show_face", args: {} }, note: "Appearing." };
+    case "hide_face":
+      return { action: { action: "hide_face", args: {} }, note: "Hiding." };
+    default:
+      return null;
   }
 }

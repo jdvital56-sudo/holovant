@@ -8,7 +8,8 @@
  * this year.
  */
 
-import { runTool, type ToolDefinition } from "./tools";
+import { runTool, isActionTool, planAction, type ToolDefinition } from "./tools";
+import { encodeAction } from "./actionTypes";
 import { TOOL_MARKER } from "./toolMarker";
 
 export interface ToolCall {
@@ -202,6 +203,25 @@ export async function* streamChat(
     // Sequential rather than parallel: these are one or two cheap calls, and
     // ordering keeps the transcript readable when something goes wrong.
     for (const call of collected.toolCalls) {
+      // An action belongs to the browser, where the interface is. The server
+      // decides on it, sends it down the stream, and tells the model it is
+      // under way — it does not wait to be told the module opened, which the
+      // user can see for themselves.
+      if (isActionTool(call.function.name)) {
+        const planned = planAction(call.function.name, call.function.arguments);
+        if (planned) {
+          yield encodeAction(planned.action);
+          conversation.push({ role: "tool", tool_call_id: call.id, content: planned.note });
+        } else {
+          conversation.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: "That could not be done. Tell the user plainly rather than claiming it worked.",
+          });
+        }
+        continue;
+      }
+
       const result = await runTool(call.function.name, call.function.arguments);
       conversation.push({ role: "tool", tool_call_id: call.id, content: result });
     }
