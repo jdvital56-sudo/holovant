@@ -2,7 +2,9 @@
 
 import { useEffect } from "react";
 import { moduleRegistry } from "@/modules/registry";
-import { loadAllModuleData } from "@/modules/moduleDataStore";
+import { loadAllModuleData, refreshModuleData } from "@/modules/moduleDataStore";
+import { usePlayStore } from "@/voice/playMusic";
+import { usePlaylistStore } from "@/voice/playlistStore";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { useSpringNumber } from "@/motion/useSpringNumber";
 import { CardSprings } from "@holovant/motion-vocabulary";
@@ -22,6 +24,16 @@ export function OrbitController() {
 
   useEffect(() => {
     loadAllModuleData();
+
+    // The Music card reads the live player and the saved collections, so it
+    // has to be re-read when either moves. Without this the card kept the
+    // numbers it had when the page opened and disagreed with its own panel.
+    const stopPlay = usePlayStore.subscribe(refreshModuleData);
+    const stopLists = usePlaylistStore.subscribe(refreshModuleData);
+    return () => {
+      stopPlay();
+      stopLists();
+    };
   }, []);
 
   return (

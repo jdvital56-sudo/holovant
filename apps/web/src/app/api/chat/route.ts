@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { streamChat, isLlmConfigured, type ChatMessage } from "@/server/llm";
 import { toolsFor, actionToolsFor } from "@/server/tools";
 import { searchBrain } from "@/server/brain";
-import { moduleRegistry } from "@/modules/registry";
+import { MODULE_IDS, isModuleLabel } from "@/modules/catalog";
 
 export const runtime = "nodejs";
 
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
     // instruction to the model.
     const claimedModule = typeof body.moduleContext === "string" ? body.moduleContext : null;
     moduleContext =
-      claimedModule && moduleRegistry.some((m) => m.label === claimedModule) ? claimedModule : null;
+      claimedModule && isModuleLabel(claimedModule) ? claimedModule : null;
     lang = body.lang === "en" ? "en" : "ru";
     assistantName =
       typeof body.assistantName === "string" && body.assistantName.trim()
@@ -161,7 +161,7 @@ export async function POST(request: Request) {
         for await (const piece of streamChat(messages, {
           tools: [
             ...toolsFor(lang === "en" ? "en" : "ru"),
-            ...actionToolsFor(moduleRegistry.map((m) => m.id)),
+            ...actionToolsFor(MODULE_IDS),
           ],
         })) {
           controller.enqueue(encoder.encode(piece));

@@ -18,7 +18,7 @@ export const useModuleDataStore = create<ModuleDataState>(() => ({
 let started = false;
 
 /**
- * Reads every module's snapshot once and keeps the projected rows.
+ * Reads every module's snapshot and keeps the projected rows.
  *
  * Awaits each provider even though today's mocks are synchronous: the contract
  * allows a Promise, so a live provider arriving in Phase 3 needs no change
@@ -27,8 +27,24 @@ let started = false;
 export function loadAllModuleData() {
   if (started) return;
   started = true;
+  void readAll();
+}
 
-  void Promise.all(
+/**
+ * Reads them again.
+ *
+ * Loading once was right while every provider returned a fixed sample. Music
+ * now reads the real player and the user's real collections, so the card face
+ * froze at whatever was true when the page opened: save three tracks and the
+ * card still said none, while the panel behind it said three. Two numbers for
+ * one thing, and the wrong one is the one on screen.
+ */
+export function refreshModuleData() {
+  void readAll();
+}
+
+function readAll() {
+  return Promise.all(
     moduleRegistry.map(async (module) => {
       try {
         const snapshot = await module.dataProvider.getSnapshot();
