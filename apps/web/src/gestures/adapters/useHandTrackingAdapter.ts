@@ -8,16 +8,28 @@ import {
   setGestureReading,
   setTrackingError,
   setLocked,
+  setDetectionFps,
 } from "@/stores/gestureStore";
 import { HandTrackingEngine, describeTrackingError, type HandPoint } from "@/gestures/engine/handTracking";
-import { pinchDistance, PINCH_THRESHOLD } from "@/gestures/classifiers/pinch";
+import { pinchDistance, isPinching, smoothDistance } from "@/gestures/classifiers/pinch";
 
 /** Degrees of carousel travel per full frame-width of hand movement. */
-const ROTATION_SENSITIVITY = 300;
+const ROTATION_SENSITIVITY = 360;
 /** Below this, movement is hand tremor rather than intent. */
 const DEADZONE = 0.0025;
-/** Above this, the hand left and re-entered the frame — not a real sweep. */
-const REACQUIRE_JUMP = 0.15;
+
+/**
+ * How far a hand may plausibly travel, per second, and still be the same hand.
+ *
+ * This was a fixed distance per frame, which quietly assumed a steady frame
+ * rate. Detection runs as fast as the machine allows, and on a busy one that is
+ * five or six readings a second — at which point an ordinary sweep moves
+ * further between readings than the limit allowed, and every real movement was
+ * thrown away as "the hand left and came back". That is what "it barely reacts
+ * to my hand" was.
+ */
+const MAX_TRAVEL_PER_SECOND = 2.5;
+
 /** HUD readout cadence; the detection loop itself runs every frame. */
 const READOUT_INTERVAL_MS = 120;
 
@@ -32,7 +44,9 @@ export function useHandTrackingAdapter() {
   const engineRef = useRef<HandTrackingEngine | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastX = useRef<number | null>(null);
+  const lastSampleAt = useRef(0);
   const wasPinching = useRef(false);
+  const smoothedPinch = useRef<number | null>(null);
   const lastReadoutAt = useRef(0);
 
   const handleResult = useCallback((hand: HandPoint[] | null) => {
@@ -40,7 +54,9 @@ export function useHandTrackingAdapter() {
 
     if (!hand) {
       lastX.current = null;
+      lastSampleAt.current = 0;
       wasPinching.current = false;
+      smoothedPinch.current = null;
       // A hand leaving frame while pinched must release the lock, or the scene
       // stays frozen with no gesture left that can free it.
       setLocked(false);
@@ -52,8 +68,8 @@ export function useHandTrackingAdapter() {
     }
 
     const wristX = hand[0][0];
-    const dist = pinchDistance(hand);
-    const pinching = dist < PINCH_THRESHOLD;
+    smoothedPinch.current = smoothDistance(smoothedPinch.current, pinchDistance(hand));
+    const pinching = isPinching(smoothedPinch.current, wasPinching.current);
 
     if (pinching && !wasPinching.current) {
       // A pinch means "this one". It locks the carousel onto the card in front
@@ -78,6 +94,7 @@ export function useHandTrackingAdapter() {
     if (pinching) {
       setLocked(true);
       lastX.current = wristX;
+      lastSampleAt.current = now;
       if (now - lastReadoutAt.current > READOUT_INTERVAL_MS) {
         lastReadoutAt.current = now;
         setGestureReading("locked", 1);
@@ -87,7 +104,11 @@ export function useHandTrackingAdapter() {
 
     if (lastX.current !== null) {
       const dx = wristX - lastX.current;
-      if (Math.abs(dx) > DEADZONE && Math.abs(dx) < REACQUIRE_JUMP) {
+      // The limit follows the gap between readings rather than assuming one:
+      // slow detection means a bigger honest step, not a rejected one.
+      const elapsed = lastSampleAt.current ? (now - lastSampleAt.current) / 1000 : 1 / 30;
+      const plausible = MAX_TRAVEL_PER_SECOND * Math.min(0.5, Math.max(0.016, elapsed));
+      if (Math.abs(dx) > DEADZONE && Math.abs(dx) < plausible) {
         // Negated: the camera sees the user mirrored, so a hand moving to the
         // user's right travels toward lower x in the image.
         useOrbitStore.setState((s) => ({ rotation: s.rotation - dx * ROTATION_SENSITIVITY }));
@@ -103,6 +124,7 @@ export function useHandTrackingAdapter() {
     }
 
     lastX.current = wristX;
+    lastSampleAt.current = now;
   }, []);
 
   const enable = useCallback(async () => {
@@ -111,7 +133,7 @@ export function useHandTrackingAdapter() {
     const engine = new HandTrackingEngine();
     engineRef.current = engine;
     try {
-      await engine.start(videoRef.current, handleResult);
+      await engine.start(videoRef.current, handleResult, setDetectionFps);
       setTrackingStatus("active");
     } catch (err) {
       engine.stop();
@@ -126,6 +148,7 @@ export function useHandTrackingAdapter() {
     setLocked(false);
     setTrackingStatus("off");
     setGestureReading(null, 0);
+    setDetectionFps(0);
   }, []);
 
   useEffect(() => () => engineRef.current?.stop(), []);

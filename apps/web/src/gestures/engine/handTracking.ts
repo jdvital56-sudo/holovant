@@ -65,7 +65,11 @@ export class HandTrackingEngine {
    * element mounted (rather than creating a detached one) is what guarantees
    * the browser actually decodes frames for it.
    */
-  async start(video: HTMLVideoElement, onResult: (landmarks: HandPoint[] | null) => void) {
+  async start(
+    video: HTMLVideoElement,
+    onResult: (landmarks: HandPoint[] | null) => void,
+    onRate?: (fps: number) => void,
+  ) {
     this.stopped = false;
     this.video = video;
 
@@ -97,6 +101,9 @@ export class HandTrackingEngine {
     if (this.stopped) return;
 
     let lastTimestamp = -1;
+    let detections = 0;
+    let rateWindowStart = performance.now();
+
     const loop = () => {
       if (this.stopped || !this.video) return;
       const v = this.video;
@@ -110,6 +117,17 @@ export class HandTrackingEngine {
           onResult(hand ? hand.map((p): HandPoint => [p.x, p.y, p.z]) : null);
         } catch {
           onResult(null);
+        }
+
+        // Measured, not assumed. Detection runs as fast as the machine allows,
+        // and how fast that actually is decides whether gestures can work here
+        // at all — so it is reported rather than guessed at.
+        detections++;
+        const sinceWindow = performance.now() - rateWindowStart;
+        if (sinceWindow >= 1000) {
+          onRate?.(Math.round((detections * 1000) / sinceWindow));
+          detections = 0;
+          rateWindowStart = performance.now();
         }
       }
       this.rafId = requestAnimationFrame(loop);

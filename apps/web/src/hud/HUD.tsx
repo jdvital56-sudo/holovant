@@ -56,6 +56,7 @@ export function HUD() {
   const { status, enable, disable, videoRef } = useHandTrackingAdapter();
   const currentGesture = useGestureStore((s) => s.currentGesture);
   const confidence = useGestureStore((s) => s.confidence);
+  const detectionFps = useGestureStore((s) => s.detectionFps);
   const errorMessage = useGestureStore((s) => s.errorMessage);
   const fps = useQualityStore((s) => s.fps);
   const tier = useQualityStore((s) => s.tier);
@@ -183,6 +184,15 @@ export function HUD() {
         <div className="text-[10px] text-mist tracking-wide">
           {status === "active" ? "HAND TRACKING ACTIVE" : "MOUSE FALLBACK ACTIVE"}
         </div>
+        {/* Below about fifteen readings a second a gesture feels dead however
+            good the code is, so the number is on screen rather than guessed. */}
+        {status === "active" && (
+          <div className="text-[10px] tracking-wide">
+            <span className={detectionFps > 0 && detectionFps < 15 ? "text-warn" : "text-mist"}>
+              {detectionFps > 0 ? `${detectionFps} HAND/S` : "measuring…"}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Centred: what was heard is feedback about the user's own speech, so it
