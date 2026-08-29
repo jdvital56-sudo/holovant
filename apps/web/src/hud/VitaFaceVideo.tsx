@@ -17,12 +17,14 @@ import { voiceLevel, setRobotVoice } from "@/audio/voiceLevel";
  * runs through the robot filter, and the figure lifts with the voice level.
  */
 
-/** Seconds: where the assembly ends and the formed loop begins. */
-const LOOP_START = 5.0;
+// Where the assembly ends and the seamless loop begins. The clip is built as a
+// palindrome — the section after this point plays forward, then backwards, and
+// ends on the very frame it starts from, so the loop has no visible jump.
+const LOOP_START = 4.0;
 
 /** Bump when the file at /vita-face.mp4 is replaced, so the browser re-fetches
  *  instead of serving a stale cached clip. */
-const CLIP = "/vita-face.mp4?v=5";
+const CLIP = "/vita-face.mp4?v=6";
 
 export function VitaFaceVideo() {
   const visible = useVitaStore((s) => s.visible);
