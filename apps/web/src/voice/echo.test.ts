@@ -21,7 +21,15 @@ describe("telling the assistant's own voice from the user's", () => {
   });
 
   it("matches across the endings Russian adds and drops", () => {
-    expect(isEchoOfSpeech("проанализировать положение", "анализировать положении")).toBe(true);
+    // A recogniser hears "проанализировать" where "анализировать" was said.
+    // Checked at sentence length, because a two-word phrase is a command and
+    // is deliberately never judged.
+    expect(
+      isEchoOfSpeech(
+        "нужно проанализировать положение компании подробно",
+        "надо анализировать положении компании подробнее",
+      ),
+    ).toBe(true);
   });
 
   it("lets a real question through, even on the same subject", () => {
@@ -39,5 +47,39 @@ describe("telling the assistant's own voice from the user's", () => {
 
   it("says nothing is an echo when nothing has been spoken", () => {
     expect(isEchoOfSpeech("какая погода", "")).toBe(false);
+  });
+});
+
+/**
+ * The other direction. Twice now the guard has eaten commands instead of echo,
+ * and both times it looked from outside like the system had stopped listening.
+ */
+describe("a short command is never mistaken for an echo", () => {
+  it("lets the face be dismissed while the face is being talked about", () => {
+    // "Лицо" was certainly said a moment ago — the face had just been shown.
+    // Half the words of "закрой лицо" match, which used to be enough to throw
+    // the command away.
+    const spoken = "Я здесь. Показываю лицо. Спрашивайте что угодно про лицо.";
+    expect(isEchoOfSpeech("закрой лицо", spoken)).toBe(false);
+    expect(isEchoOfSpeech("скрой лицо", spoken)).toBe(false);
+  });
+
+  it("lets the chat be dismissed while the chat is on screen", () => {
+    const spoken = "Отвечаю в чате. Вот что нашёл по вашему вопросу в чате.";
+    expect(isEchoOfSpeech("закрой чат", spoken)).toBe(false);
+    expect(isEchoOfSpeech("убери чат", spoken)).toBe(false);
+  });
+
+  it("lets other short orders through", () => {
+    const spoken = "Включаю музыку Radiohead, громкость восемьдесят процентов.";
+    expect(isEchoOfSpeech("выключи музыку", spoken)).toBe(false);
+    expect(isEchoOfSpeech("сделай тише", spoken)).toBe(false);
+    expect(isEchoOfSpeech("следующий трек", spoken)).toBe(false);
+  });
+
+  it("still catches a real echo, which arrives as a whole sentence", () => {
+    const spoken =
+      "Давайте уточним. Подскажите, что именно анализировать, и я сразу перейду к делу.";
+    expect(isEchoOfSpeech("Давайте уточним Что именно нужно проанализировать", spoken)).toBe(true);
   });
 });

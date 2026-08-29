@@ -81,3 +81,28 @@ describe("the assistant answers to its new name", () => {
     expect(matchIntent("тор сделай громче")).toMatchObject({ kind: "volume" });
   });
 });
+
+/**
+ * Commands whose subject is not music must survive music playing.
+ *
+ * A shortcut that stopped the player on any short phrase containing a stop
+ * word claimed these: "убери лицо" turned the music off and left the face
+ * exactly where it was. Whether the shortcut still overreaches cannot be seen
+ * from the matcher alone, so what is checked here is that each of these does
+ * resolve to a command — the shortcut now defers to any command that matches.
+ */
+describe("a command about something else, while music plays", () => {
+  it("still resolves to its own intent", () => {
+    expect(matchIntent("убери лицо")).toMatchObject({ kind: "showFace", show: false });
+    expect(matchIntent("закрой лицо")).toMatchObject({ kind: "showFace", show: false });
+    expect(matchIntent("убери чат")).toMatchObject({ kind: "dismiss", target: "chat" });
+    expect(matchIntent("закрой чат")).toMatchObject({ kind: "dismiss", target: "chat" });
+    expect(matchIntent("открой погоду")).toMatchObject({ kind: "open", moduleId: "weather" });
+  });
+
+  it("still lets a music order be a music order", () => {
+    expect(matchIntent("выключи музыку")).toMatchObject({ kind: "dismiss", target: "player" });
+    expect(matchIntent("убери плеер")).toMatchObject({ kind: "dismiss", target: "player" });
+    expect(matchIntent("пауза")).toMatchObject({ kind: "pause" });
+  });
+});

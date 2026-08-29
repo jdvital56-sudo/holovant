@@ -75,25 +75,35 @@ export function HUD() {
     warmUpServerVoice();
   }, []);
 
-  // While Vita's face is up the screen is just the face on black — the whole
-  // dashboard HUD is gone, leaving only the one hint for getting back.
-  if (vitaVisible) {
-    return (
-      <div className="fixed inset-x-0 bottom-8 z-20 flex justify-center font-mono">
-        <button
-          type="button"
-          onClick={hideVita}
-          className="pointer-events-auto flex items-center gap-2 rounded-full border border-signal/40 bg-[rgba(16,24,38,0.7)] px-4 py-1.5 backdrop-blur-md transition-colors hover:border-signal"
-        >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal shadow-[0_0_8px_rgba(111,179,255,0.7)]" />
-          <span className="text-[11px] uppercase tracking-[0.2em] text-frost">{ASSISTANT_NAME}</span>
-          <span className="text-[10px] text-mist/60">say “скрой лицо”</span>
-        </button>
-      </div>
-    );
-  }
-
+  // While the face is up the screen is just the face on black — the whole
+  // dashboard is gone, leaving only the one hint for getting back.
+  //
+  // The camera element is outside that choice, in a fixed position in the tree.
+  // It hosts the video the tracking engine holds, and a video React unmounts is
+  // one the browser stops decoding: the engine keeps its reference, sees no
+  // more frames, and hand tracking is dead for the rest of the session with the
+  // button still reading ON. Showing the face and hiding it again was enough.
+  //
+  // Rendering it in both branches is not enough either — a different parent
+  // means a different element, and the engine would still hold the old one. It
+  // has to be the same node either way, which is why the branch is inside the
+  // fragment rather than around it.
   return (
+    <>
+      <CameraFeed videoRef={videoRef} />
+      {vitaVisible ? (
+        <div className="fixed inset-x-0 bottom-8 z-20 flex justify-center font-mono">
+          <button
+            type="button"
+            onClick={hideVita}
+            className="pointer-events-auto flex items-center gap-2 rounded-full border border-signal/40 bg-[rgba(16,24,38,0.7)] px-4 py-1.5 backdrop-blur-md transition-colors hover:border-signal"
+          >
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal shadow-[0_0_8px_rgba(111,179,255,0.7)]" />
+            <span className="text-[11px] uppercase tracking-[0.2em] text-frost">{ASSISTANT_NAME}</span>
+            <span className="text-[10px] text-mist/60">say “скрой лицо”</span>
+          </button>
+        </div>
+      ) : (
     // translate="no" keeps browser translators from replacing these text
     // nodes: the clock and frame counter rewrite themselves several times a
     // second, and React can hard-crash removing a node a translator swapped.
@@ -213,7 +223,8 @@ export function HUD() {
         </div>
       )}
 
-      <CameraFeed videoRef={videoRef} />
     </div>
+      )}
+    </>
   );
 }

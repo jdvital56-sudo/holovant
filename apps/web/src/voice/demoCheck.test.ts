@@ -122,3 +122,36 @@ describe("the weather answer as it will be heard", () => {
     );
   });
 });
+
+/**
+ * The four answers the live assistant gave on the final check before the
+ * demonstration, run through the voice pipeline exactly as they arrived.
+ */
+describe("the answers recorded on the final check", () => {
+  const CASES: Array<[written: string, spoken: string]> = [
+    [
+      "В Киеве сейчас 25 градусов, ясно, ветер около 10 км/ч, влажность 38%. Сегодня от 12 до 26 градусов — приятный день.",
+      "В Киеве сейчас 25 градусов, ясно, ветер около десяти километров в час, влажность 38 процентов. Сегодня от двенадцати до двадцати шести градусов, приятный день.",
+    ],
+    ["Открыл погоду.", "Открыл погоду."],
+    [
+      "Сегодня суббота, 29 августа 2026 года.",
+      "Сегодня суббота, двадцать девятого августа две тысячи двадцать шестого года.",
+    ],
+    ["Открыл Wikipedia.", "Открыл Wikipedia."],
+  ];
+
+  for (const [written, spoken] of CASES) {
+    it(`says “${written.slice(0, 34)}…” correctly`, () => {
+      expect(forVoice(written)).toBe(spoken);
+    });
+  }
+
+  it("leaves no mark or short form anywhere in them", () => {
+    for (const [written] of CASES) {
+      const said = forVoice(written);
+      expect(said, written).not.toMatch(/[*_`#|~/\×$€₴£%°&]/);
+      expect(said, written).not.toMatch(/\d[.,]\d/);
+    }
+  });
+});

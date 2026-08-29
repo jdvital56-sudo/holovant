@@ -134,29 +134,36 @@ export function useVoiceCommands() {
   const runIntent = useCallback((transcript: string, lang: SpeechLang) => {
     const lower = transcript.trim().toLowerCase();
 
-    // Music is playing and the user said something that sounds like "stop" —
-    // stop the player, whatever the exact words. This is caught before the
-    // matcher and the model so a "turn it off" phrase can never reach the
-    // model, which will cheerfully claim the music stopped when it did not.
-    const STOPPY = /выключ|выруб|останов|заглуш|глуши|убери|хватит|отключ|стоп|turn off|shut|stop|pause/;
-    const aboutChatOrAll = /чат|ответ|chat|answer|вс[её]|everything|\ball\b/.test(lower);
-    const aboutMusic =
-      /музык|песн|трек|плеер|music|song|track|player|полност/.test(lower) ||
-      lower.split(/\s+/).filter(Boolean).length <= 2;
-    if (
-      usePlayStore.getState().status !== "idle" &&
-      STOPPY.test(lower) &&
-      !aboutChatOrAll &&
-      aboutMusic
-    ) {
-      clearPlayback();
-      speak(lang === "ru" ? "Выключаю музыку" : "Stopping the music", lang);
-      setLastCommand(lang === "ru" ? "музыка выкл." : "music off");
-      playBlip("confirm");
-      return;
-    }
-
     const intent = matchIntent(transcript);
+
+    // Music is playing and the user said something that means stop, in words
+    // the matcher does not cover. Kept so a phrasing it misses never reaches
+    // the model, which will cheerfully report that the music stopped when it
+    // did not.
+    //
+    // It runs after the matcher, not before. Ahead of it, this claimed any
+    // short phrase containing a stop word: "убери лицо" turned the music off
+    // and left the face exactly where it was. A recognised command now decides
+    // for itself, and this only catches what nothing else did.
+    if (!intent) {
+      const STOPPY = /выключ|выруб|останов|заглуш|глуши|убери|хватит|отключ|стоп|turn off|shut|stop|pause/;
+      const namesSomethingElse = /чат|ответ|лиц|окн|chat|answer|face|вс[её]|everything|\ball\b/.test(lower);
+      const namesMusic = /музык|песн|трек|плеер|music|song|track|player|полност/.test(lower);
+      const bareOrder = lower.split(/\s+/).filter(Boolean).length <= 2;
+
+      if (
+        usePlayStore.getState().status !== "idle" &&
+        STOPPY.test(lower) &&
+        !namesSomethingElse &&
+        (namesMusic || bareOrder)
+      ) {
+        clearPlayback();
+        speak(lang === "ru" ? "Выключаю музыку" : "Stopping the music", lang);
+        setLastCommand(lang === "ru" ? "музыка выкл." : "music off");
+        playBlip("confirm");
+        return;
+      }
+    }
 
     if (!intent) {
       const question = transcript.trim();
