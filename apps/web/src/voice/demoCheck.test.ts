@@ -71,3 +71,54 @@ describe("endings, as a Russian speaker expects them", () => {
     expect(forVoice("25 млн")).toBe("25 миллионов");
   });
 });
+
+/**
+ * The weather answer he was read: the degrees agreed and the numbers in front
+ * of them did not.
+ */
+describe("numbers after a preposition, in the sentences he heard", () => {
+  it("declines the range as well as the unit", () => {
+    expect(forVoice("Сегодня от 12 до 26 градусов")).toBe(
+      "Сегодня от двенадцати до двадцати шести градусов",
+    );
+    expect(forVoice("В Киеве 22 градуса, сегодня от 12 до 22 градусов")).toBe(
+      "В Киеве 22 градуса, сегодня от двенадцати до двадцати двух градусов",
+    );
+  });
+
+  it("handles a written range, which becomes a preposition first", () => {
+    expect(forVoice("сегодня 12–26 градусов")).toBe(
+      "сегодня от двенадцати до двадцати шести градусов",
+    );
+  });
+
+  it("declines after the other prepositions that take the genitive", () => {
+    expect(forVoice("около 44 гривен")).toBe("около сорока четырёх гривен");
+    expect(forVoice("с 9 до 18 часов")).toBe("с девяти до восемнадцати часов");
+    expect(forVoice("свыше 100 человек")).toBe("свыше ста человек");
+  });
+
+  it("leaves a figure alone where the case is already right", () => {
+    expect(forVoice("В Киеве 22 градуса")).toBe("В Киеве 22 градуса");
+    expect(forVoice("Сейчас 22:08")).toBe("Сейчас 22 часа 8 минут");
+  });
+
+  it("does not half-convert a decimal", () => {
+    // Both halves would have to decline; half a conversion sounds worse than
+    // none, so the figures are left for the plain reading.
+    expect(forVoice("около 44,57 грн")).toBe("около 44 и 57 гривны");
+  });
+});
+
+/** The live answer he was just given, run through the voice pipeline. */
+describe("the weather answer as it will be heard", () => {
+  it("declines the range and the percentage", () => {
+    expect(
+      forVoice(
+        "В Киеве сейчас 25 градусов, почти ясно, ветер лёгкий, влажность 38%. Сегодня от 12 до 26 — вечером будет прохладно.",
+      ),
+    ).toBe(
+      "В Киеве сейчас 25 градусов, почти ясно, ветер лёгкий, влажность 38 процентов. Сегодня от двенадцати до двадцати шести, вечером будет прохладно.",
+    );
+  });
+});

@@ -6,7 +6,14 @@
  * read out by its name.
  */
 
-import { pluralRu, dayOrdinal, yearOrdinal, type GrammaticalCase, type NounForms } from "./russianNumbers";
+import {
+  pluralRu,
+  dayOrdinal,
+  yearOrdinal,
+  genitiveCardinal,
+  type GrammaticalCase,
+  type NounForms,
+} from "./russianNumbers";
 
 export type SpeechLang = "ru" | "en";
 
@@ -177,6 +184,23 @@ export function forVoice(text: string, lang: SpeechLang = "ru"): string {
   // Boundaries are lookarounds rather than a word boundary, which in JavaScript is
   // ASCII-only and never fires between a space and a Cyrillic letter.
   out = expandAbbreviations(out, ru);
+
+  // A number after a preposition takes the preposition's case, and a
+  // synthesiser reads every figure in the nominative. "Сегодня от 12 до 26
+  // градусов" came out as "от двенадцать до двадцать шесть" — the noun after
+  // it already right, the number in front of it still wrong.
+  //
+  // A figure with a decimal part is left alone: it would have to be split and
+  // both halves declined, and half a conversion sounds worse than none.
+  if (ru) {
+    out = out.replace(
+      /(^|\s)(от|до|около|свыше|более|менее|порядка|с|из|у|для|без|начиная с|вплоть до)\s+(\d{1,3})(?![.,]?\d)/gu,
+      (whole, lead: string, preposition: string, digits: string) => {
+        const said = genitiveCardinal(Number(digits));
+        return said ? `${lead}${preposition} ${said}` : whole;
+      },
+    );
+  }
 
   // The decimal separator itself. Said aloud a person joins the halves with a
   // word, never with the name of the mark between them.

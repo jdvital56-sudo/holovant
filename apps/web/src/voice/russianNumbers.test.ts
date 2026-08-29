@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pluralRu, dayOrdinal, yearOrdinal } from "./russianNumbers";
+import { pluralRu, dayOrdinal, yearOrdinal, genitiveCardinal } from "./russianNumbers";
 
 /**
  * "22 градусов" and "28 августа 2026" are what a synthesiser says when nobody
@@ -58,5 +58,35 @@ describe("dates as they are said aloud", () => {
     expect(yearOrdinal(2020)).toBe("две тысячи двадцатого");
     expect(yearOrdinal(2000)).toBe("двухтысячного");
     expect(yearOrdinal(1999)).toBe("тысяча девятьсот девяносто девятого");
+  });
+});
+
+/**
+ * "Сегодня от 12 до 26 градусов" came out as "от двенадцать до двадцать шесть
+ * градусов". The noun was already right; the number in front of it was not.
+ * A preposition puts the figure in its case too, and a synthesiser reads every
+ * figure in the nominative.
+ */
+describe("a number after a preposition", () => {
+  it("gives the plain numbers", () => {
+    expect(genitiveCardinal(1)).toBe("одного");
+    expect(genitiveCardinal(5)).toBe("пяти");
+    expect(genitiveCardinal(12)).toBe("двенадцати");
+    expect(genitiveCardinal(20)).toBe("двадцати");
+    expect(genitiveCardinal(40)).toBe("сорока");
+    expect(genitiveCardinal(90)).toBe("девяноста");
+  });
+
+  it("builds a compound from its parts", () => {
+    expect(genitiveCardinal(26)).toBe("двадцати шести");
+    expect(genitiveCardinal(44)).toBe("сорока четырёх");
+    expect(genitiveCardinal(101)).toBe("ста одного");
+    expect(genitiveCardinal(365)).toBe("трёхсот шестидесяти пяти");
+  });
+
+  it("says nothing rather than guessing beyond what it covers", () => {
+    expect(genitiveCardinal(1000)).toBeNull();
+    expect(genitiveCardinal(1.5)).toBeNull();
+    expect(genitiveCardinal(-4)).toBeNull();
   });
 });

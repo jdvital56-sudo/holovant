@@ -147,3 +147,83 @@ export function yearOrdinal(year: number, grammaticalCase: GrammaticalCase = "ge
   if (rest === 0) return `тысяча ${decline("девятисотый", grammaticalCase)}`;
   return `тысяча ${HUNDREDS_CARDINAL[900]} ${decline(ordinalUnderHundred(rest), grammaticalCase)}`;
 }
+
+/** Cardinals in the genitive, which is the case nearly every preposition takes. */
+const UNITS_GENITIVE = [
+  "",
+  "одного",
+  "двух",
+  "трёх",
+  "четырёх",
+  "пяти",
+  "шести",
+  "семи",
+  "восьми",
+  "девяти",
+];
+
+const TEENS_GENITIVE = [
+  "десяти",
+  "одиннадцати",
+  "двенадцати",
+  "тринадцати",
+  "четырнадцати",
+  "пятнадцати",
+  "шестнадцати",
+  "семнадцати",
+  "восемнадцати",
+  "девятнадцати",
+];
+
+const TENS_GENITIVE: Record<number, string> = {
+  20: "двадцати",
+  30: "тридцати",
+  40: "сорока",
+  50: "пятидесяти",
+  60: "шестидесяти",
+  70: "семидесяти",
+  80: "восьмидесяти",
+  90: "девяноста",
+};
+
+const HUNDREDS_GENITIVE: Record<number, string> = {
+  100: "ста",
+  200: "двухсот",
+  300: "трёхсот",
+  400: "четырёхсот",
+  500: "пятисот",
+  600: "шестисот",
+  700: "семисот",
+  800: "восьмисот",
+  900: "девятисот",
+};
+
+/**
+ * A number as it is said after a preposition: "от двенадцати до двадцати шести".
+ *
+ * A synthesiser reads every figure in the nominative, so "от 12 до 26" came out
+ * as "от двенадцать до двадцать шесть" — the noun after it was already right,
+ * and the number in front of it was still wrong. Returns null above what is
+ * covered, so the caller leaves the digits alone rather than guessing.
+ */
+export function genitiveCardinal(n: number): string | null {
+  if (!Number.isInteger(n) || n < 0 || n > 999) return null;
+  if (n === 0) return "нуля";
+
+  const hundreds = Math.floor(n / 100) * 100;
+  const remainder = n % 100;
+
+  const parts: string[] = [];
+  if (hundreds) parts.push(HUNDREDS_GENITIVE[hundreds]);
+
+  if (remainder >= 10 && remainder <= 19) {
+    parts.push(TEENS_GENITIVE[remainder - 10]);
+  } else {
+    const tens = Math.floor(remainder / 10) * 10;
+    const units = remainder % 10;
+    if (tens) parts.push(TENS_GENITIVE[tens]);
+    if (units) parts.push(UNITS_GENITIVE[units]);
+  }
+
+  return parts.join(" ");
+}

@@ -164,7 +164,9 @@ describe("forVoice — a range is said with words", () => {
     expect(forVoice("покупают за 44,30–44,40 грн")).toBe(
       "покупают за от 44 и 30 до 44 и 40 гривны",
     );
-    expect(forVoice("сегодня от 12–22 градусов")).toBe("сегодня от 12 до 22 градусов");
+    expect(forVoice("сегодня от 12–22 градусов")).toBe(
+      "сегодня от двенадцати до двадцати двух градусов",
+    );
   });
 
   it("leaves a dash between words as a pause", () => {
