@@ -16,117 +16,184 @@ on a fresh clone, and every feature behind it degrades honestly rather than
 failing: no key means the assistant says so out loud.
 
 Checks before committing: `pnpm --filter web typecheck`, `... lint`,
-`... test`. Lint is slow — allow two or three minutes.
+`... test`. Lint is slow — allow two or three minutes. There are 263 tests.
 
 ## What works
 
 - 3D orbit of 16 module cards, hologram treatment, accents running violet to
   cyan in orbit order so a module is recognisable by hue in peripheral vision
 - Server-side voice through Piper, 281–358ms measured, warmed on page load
-- Streaming conversation with DeepSeek, provider-agnostic (OpenAI-compatible)
-- Vita: named assistant, name is configuration so each customer sets their own
-- Vita's face: a generated hologram clip played over black. Summoned by voice,
-  it assembles from a spark and loops its formed tail. While it is up the whole
-  dashboard is hidden, the 3D scene stops rendering, and the voice runs through
-  a light ring modulator
-- Voice commands: open a module, rotate, close, search the web, play music,
-  save and replay favourite tracks, volume up and down, dismiss the chat or the
-  player, wake on the assistant's name, show and hide the face
-- The assistant has tools and uses them: web search, weather, the current time,
-  and the user's own notes. It called none of these until 28 Aug and therefore
-  answered questions about today from training data, or said it had no internet
-  access — which was true of the model and false of the product
-- Second brain: a folder of Markdown, indexed in memory and re-read by
-  modification time. Empty for a customer until they connect their own
+- **Thor** — the assistant's name. It is configuration; the spellings a
+  recogniser produces for a name ("тор", "тхор", "thor") are a per-name list in
+  `config/assistant.ts`, extendable through the environment
+- Thor's face: a generated hologram clip on black. Summoned by voice, it
+  assembles from a spark. While it is up the whole dashboard is hidden, the 3D
+  scene stops rendering, and the voice runs through a light ring modulator
+- The assistant has **tools**: web search, weather, the current time, the
+  user's notes. Without them it answered questions about today from training
+  data, or said it had no internet — true of the model and false of the product
+- The assistant has **hands**: it opens modules, plays and pauses music, plays
+  a saved collection, saves the playing track, opens a web page, changes the
+  volume, shows and hides its face. Chosen by the model like any tool, but
+  performed in the browser — see "Actions" below
+- **Named music collections.** Created by naming one ("сохрани в подборку для
+  работы"), played back by name, listed on request. Held in localStorage
+- Voice commands: open a module, rotate, close, search, play, pause, resume,
+  next, save, play a collection, list collections, volume, dismiss chat or
+  player, wake on the name, show and hide the face, stop
+- **Russian is spoken correctly**: nouns agree with their numeral, dates and
+  years are ordinals, numbers after a preposition are declined, clock times are
+  hours and minutes, units and abbreviations are said in full
+- Second brain: a folder of Markdown, indexed in memory, re-read by mtime
 - Web search (Firecrawl), weather (Open-Meteo, no key), a real system check
-- Music through the YouTube Data API when `YOUTUBE_API_KEY` is set, cached for
-  a day; falls back to reading the results page when it is not
+- Music through the YouTube Data API, cached a day; falls back to reading the
+  results page when `YOUTUBE_API_KEY` is unset
 - A perimeter on `/api/*`: rate limit always, plus a shared token enforced only
   when `HOLOVANT_ACCESS_TOKEN` is set
-- Several accounts per social module, combined by default
-- Hand tracking, pinch to freeze the scene
-- 58 tests; lint and types clean; CI runs all three on every push
+- Hand tracking: movement steers the orbit and stops with the hand, pinch
+  toggles a card. The HUD reports measured readings per second
+- 263 tests; lint and types clean; CI runs all three on every push
 
 ## What is not built
 
-Module data is mock everywhere except weather, system and the brain. The
-provider interface takes live sources without touching the UI, but none are
-connected. There is no sign-in, no payment, and no deployment — it runs on one
-machine.
+Module data is mock everywhere except weather, system, the brain and music. The
+provider interface takes live sources without touching the UI, but no social or
+financial source is connected. There is no sign-in, no payment, and no
+deployment — it runs on one machine.
 
-Asked for and still open: acting rather than only reporting ("schedule a post
-for Thursday" should happen); memory of the user; a morning briefing; the
-assistant speaking first.
+Asked for and still open: memory of the user; a morning briefing; the assistant
+speaking first.
+
+## The lesson that matters most
+
+**Fix a bug in both directions, or it comes back.**
+
+The founder named this before I did: "мы снова и снова повторяем те же самые
+ошибки, по кругу идём". He was right, and the cause was never judgement — it
+was checking each fix against the complaint of that day and nothing else.
+
+The echo guard was wrong in both directions, twice each. Tightened to stop the
+assistant answering its own voice, it ate the user's follow-ups and his short
+commands; loosened, the first fault returned. A spring stiffened so the
+carousel would stop with the hand went numerically unstable at thirty frames a
+second and left for infinity. Each change was correct for the case in front of
+me and wrong for the case it had just displaced.
+
+So, for any threshold, heuristic or spring config:
+
+- Write down what must **still** work, not only what must now work. Both go in
+  one test file, as a table.
+- Use real transcripts and real phrases from the person who reported it.
+  Invented examples agree with whatever you already believe.
+- Never report a fix as done on the strength of the reported case passing.
+
+`echoBothWays.test.ts`, `handMotion.test.ts` and `springStability.test.ts` are
+that rule made concrete. `reported.test.ts` holds every break he has reported,
+written in his own words.
+
+For anything you cannot see — a camera, a WebGL surface, a microphone — say so,
+put a number on screen he can read back, and reason with arithmetic rather than
+adjusting values and asking whether it feels better. Simulating the detection
+rate found the gesture bug in a minute; waving at a camera would not have.
 
 ## Things that will bite you
 
 **The microphone hears the assistant's own voice.** Everything about the voice
-loop follows from this. Acting on what it hears while speaking makes it answer
-its own answers; ignoring everything while speaking makes it deaf for the whole
-length of a reply, which reads as a freeze. The settled rule, in
-`useVoiceCommands.ts`: "стоп" always acts, even on a partial result; text that
-mostly overlaps the line being spoken is discarded as echo; a *command* said
-over a reply cuts it off and runs; a *question* said over a reply is dropped.
+loop follows. Acting on what it hears while speaking makes it answer its own
+answers; ignoring everything makes it deaf for the whole length of a reply. The
+settled rule in `useVoiceCommands.ts`: "стоп" always acts, even on a partial
+result; a *command* over a reply cuts it off and runs; a *question* over a
+reply is dropped; nothing is taken as a question for 1.8s after the voice
+stops; a line resembling recent speech is discarded for twelve seconds after
+that. **Short phrases are never judged as echo** — "закрой лицо" is two words
+and both had just been spoken.
 
-**Do not add a guard that compares a question to the previous answer.** One
-lived here, meant to catch the assistant's voice echoing back, and it discarded
-follow-ups instead: ask about the exchange rate, hear the rate, ask again, and
-every word of the second question appears in the first answer. It was dropped
-in silence, which looks exactly like a system that has stopped working. Echo is
-handled at the recogniser, which is the only place it can be told apart.
+**A promise in text is not an action.** It has failed this way twice: it wrote
+"открываю сайт" and opened nothing; it wrote "я проверю новости" and never
+searched. The brief forbids writing that you are opening, playing or checking
+something without having called the tool in the same turn. A tool call arriving
+after some text no longer ends the turn — that text is a preamble.
 
-**Figures are rewritten before they are spoken.** A synthesiser reads "44.48"
-as "сорок четыре точка сорок восемь" and "$80,270" beginning with the name of
-the dollar sign. `forVoice` resolves separators and symbols into words; the
-panel keeps the original, which is what reads correctly on a screen.
-
-**What the model is told is in the user's notes is not the client's to send.**
-`/api/chat` looks them up itself. It also checks the language and module
-context against the registry: anything a caller can put in the system prompt is
-an instruction to the model.
-
-**A failed command must not reach the model.** Asked to stop the music by a
-phrase the matcher missed, the model will say the music has stopped. It has
-not. Phrases that mean stop are caught before the matcher when something is
-playing, and anything that starts like a command but matches nothing is
-answered "не понял команду".
+**A failed command must not reach the model.** Asked to stop the music in words
+the matcher missed, the model reported that the music had stopped. Phrases that
+mean stop are caught when something is playing, but *after* the matcher, so a
+command about something else wins — "убери лицо" used to stop the music and
+leave the face.
 
 **Voice commands match word stems, not whole words.** Russian inflects, and
-commands are spoken in the accusative — "включи музыку", not "музыка".
+commands are spoken in the accusative.
 
-**Music goes through the YouTube Data API, and never the general web search.**
-The web search returns watch links only for the most literal titles, so every
-artist name came back as nothing found. Reading the results page works and is
-against YouTube's terms; it stays only as the fallback for an install with no
-`YOUTUBE_API_KEY`. A search costs 100 of the 10,000 free daily units, hence the
-day-long cache.
+**Unmounting a component kills whatever engine holds its element.** The camera
+video lives in the HUD; showing the face replaced the HUD, unmounting it, and
+hand tracking was dead for the session with the button still reading ON.
+Rendering it in both branches is not enough — a different parent is a different
+element. It sits at a fixed position ahead of the branch.
 
-**A browser will not open tabs or start audible sound without a click.** A
-spoken command is not a click. This is why the player is embedded.
+**The spring integrator is only stable while the step is under 2/√tension.**
+Frame time is clamped at a thirtieth of a second, so a tension above about five
+hundred used to diverge exactly when the machine was busiest — the carousel
+span too fast to see and nothing stopped it. Steps are sliced at a
+hundred-and-twentieth now, and `springStability.test.ts` checks every config at
+every frame rate. Below thirty frames a second every animation runs in slow
+motion — that is the clamp's price, deliberate, and worth knowing.
+
+**Music goes through the YouTube Data API, never the general web search**,
+which returns watch links only for the most literal titles.
+
+**A browser will not open a tab without a click.** With popups allowed for the
+origin it goes straight through; without, a chip asks for one tap. This is a
+rule of the browser, said plainly rather than promised away.
 
 **Native libraries break on non-ASCII paths.** espeak inside Piper cannot open
-a path containing Cyrillic, which is every path under this user's home folder.
-It is handed the 8.3 short name, and the path must be set on the voice object
-*after* the model loads.
+a path containing Cyrillic. It is handed the 8.3 short name, after the model
+loads.
 
-**Do not use `instrumentation.ts` for server warm-up.** Next compiles it for the
-edge runtime too, where `node:child_process` fails the build and takes the
-speech route down with it. Warm-up is a GET on `/api/speak` instead.
+**Do not use `instrumentation.ts` for server warm-up.** Next compiles it for
+the edge runtime, where `node:child_process` fails the build.
 
 **One dev server at a time.** Two writing to the same `.next` corrupts it, and
-the symptom looks like broken code: HTTP 200, HUD drawn, no client hydration.
-Kill by PID from `netstat -ano | grep :3000`, delete `.next`, restart.
+the symptom looks like broken code: HTTP 200, HUD drawn, no hydration. Kill by
+PID from `netstat -ano | grep :3000`, delete `.next`, restart.
+
+**A stale browser tab lies about the console.** Errors accumulate across every
+hot reload. Judge a clean build from a freshly opened tab, never the one that
+has been open all session.
 
 **Replacing a file in `public/` does not reach the browser.** The face clip is
-requested with a version query (`/vita-face.mp4?v=5`); bump it when the file
-changes or a stale clip is served from cache.
+requested with a version query (`?v=6`); bump it when the file changes.
 
-**Full 3D plus a full-screen video is too much at once.** The scene sets
-`frameloop="never"` while the face is up, and the video avoids `mix-blend-mode`
-and animated drop shadows — both are per-frame full-screen GPU passes.
+**Escapes do not survive being written through a shell.** `\b` has arrived as a
+literal backspace byte and `\p{L}` as `p{L}`, twice each — patterns that look
+correct and match nothing. Build regexes with `String.raw`;
+`sourceHygiene.test.ts` fails on any control character in the source.
+
+## Actions
+
+The model chooses an action like any tool, but the interface is in the browser,
+so the server does not perform it: it sends the action down the answer stream
+inside an envelope delimited by control characters, and the client unpacks and
+carries it out. One direction — it does not wait to be told the module opened,
+which the user sees faster than a round trip could report. An envelope split
+across two chunks is held back rather than acted on half-formed. Only http and
+https addresses are ever opened, checked where the action is made and again
+where it runs. See `server/actionTypes.ts` and `voice/actionRunner.ts`.
+
+## Open, and owed to the founder
+
+- **The measured hand rate is unknown.** The HUD shows readings per second;
+  below fifteen a gesture feels dead whatever the code does, and that is a
+  different problem with a different fix. He has been asked for the number.
+- **Popup permission is per-origin.** Allowed on his machine for
+  `localhost:3000`. A deployment needs it again, and so does every customer —
+  it belongs in a first-run screen rather than as a surprise.
+- **The repository is public**, his deliberate choice so he can work on it from
+  several tools. He asked to be reminded to close it before selling. `LICENSE`
+  is "all rights reserved" as a minimum in the meantime.
+- **`HOLOVANT_ACCESS_TOKEN` is unset**, correct locally and wrong the moment
+  there is a public address.
 
 ## The rule that matters most
 
-Anything the interface promises, the product must do. The Music module once told
-users to say "play" while no such command existed. That is worse than a missing
-feature, because it spends the user's trust before they find out.
+Anything the interface promises, the product must do. The Music module once
+told users to say "play" while no such command existed. That is worse than a
+missing feature, because it spends the user's trust before they find out.
