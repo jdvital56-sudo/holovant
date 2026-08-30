@@ -188,15 +188,17 @@ export async function* streamChat(
 
     if (!collected.toolCalls.length) return;
 
-    // Text and a tool call in the same turn: the text has already been spoken,
-    // so running the tool would answer a question the user has heard answered.
-    if (sawText) return;
-
-    // Checking takes seconds, and until now those seconds were silence — the
-    // system looked like it had stopped rather than like it was working. The
-    // client turns this into a short spoken acknowledgement and drops it from
-    // the answer.
-    if (round === 0) yield TOOL_MARKER;
+    // Text and a tool call in the same turn used to end the turn here, on the
+    // reasoning that the text was already an answer and running the tool would
+    // answer it twice. It is a preamble, not an answer: asked what was new in
+    // AI, it said "я проверю свежие новости" and then stopped, having promised
+    // to check and never checked. The tool runs regardless now, and the
+    // preamble does the job the acknowledgement below was invented for.
+    //
+    // Checking takes seconds, and those seconds were silence — the system
+    // looked stopped rather than working. Sent only when the model said
+    // nothing of its own, so the user is never told twice.
+    if (!sawText && round === 0) yield TOOL_MARKER;
 
     conversation.push({ role: "assistant", content: "", tool_calls: collected.toolCalls });
 
