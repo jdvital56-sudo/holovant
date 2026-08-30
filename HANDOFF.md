@@ -51,7 +51,12 @@ Checks before committing: `pnpm --filter web typecheck`, `... lint`,
 - A perimeter on `/api/*`: rate limit always, plus a shared token enforced only
   when `HOLOVANT_ACCESS_TOKEN` is set
 - Hand tracking: movement steers the orbit and stops with the hand, pinch
-  toggles a card. The HUD reports measured readings per second
+  toggles a card. Under the tracking button, at a size that can be read out
+  loud, the HUD reports what it measures: readings a second, the lowest of the
+  last ten, what the camera promised and the frame size it gave, what a look
+  costs while searching for a hand and while following one, and which
+  processor is doing the looking — switchable, since the graphics card is not
+  always the faster of the two
 - 263 tests; lint and types clean; CI runs all three on every push
 
 ## What is not built
@@ -180,9 +185,18 @@ where it runs. See `server/actionTypes.ts` and `voice/actionRunner.ts`.
 
 ## Open, and owed to the founder
 
-- **The measured hand rate is unknown.** The HUD shows readings per second;
-  below fifteen a gesture feels dead whatever the code does, and that is a
-  different problem with a different fix. He has been asked for the number.
+- **The hand rate is measured, and this machine cannot do gestures.** Seven to
+  eight readings a second, where fifteen is the floor. One pass of the hand
+  model costs eighty to ninety milliseconds here, which caps the rate near
+  twelve before rendering takes its share. Four explanations were tested and
+  all four were wrong: the camera promises and delivers thirty; the scene is
+  not the thief (stripping it to minimal made detection *worse*); the graphics
+  card is not secretly the processor, and forcing the processor changed nothing
+  (89ms against 79ms); a quarter of the pixels changed nothing (92ms against
+  79ms, against a drift of some fifteen between readings) and was reverted.
+  Nothing here is worth another guess — what is left is a cheaper model or a
+  faster machine. A worker would smooth the scene and leave the rate where it
+  is.
 - **Popup permission is per-origin.** Allowed on his machine for
   `localhost:3000`. A deployment needs it again, and so does every customer —
   it belongs in a first-run screen rather than as a surprise.

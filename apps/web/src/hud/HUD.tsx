@@ -13,6 +13,8 @@ import { ASSISTANT_NAME } from "@/config/assistant";
 import { useCardStyleStore, cycleCardStyle, CARD_STYLE_LABEL } from "@/stores/cardStyleStore";
 import { warmUpServerVoice } from "@/voice/speech";
 import { useHandTrackingAdapter } from "@/gestures/adapters/useHandTrackingAdapter";
+import { getPreferredDelegate, setPreferredDelegate, type Delegate } from "@/gestures/engine/handTracking";
+import { describeHandRate, type HandRateReadout } from "@/gestures/handRateReadout";
 import { CameraFeed } from "./CameraFeed";
 import { moduleRegistry } from "@/modules/registry";
 
@@ -42,6 +44,12 @@ const STATUS_LABEL: Record<string, string> = {
   error: "ERROR",
 };
 
+const RATE_TONE: Record<HandRateReadout["tone"], string> = {
+  good: "text-signal",
+  warn: "text-warn",
+  quiet: "text-mist",
+};
+
 const VOICE_LABEL: Record<string, string> = {
   off: "OFF",
   starting: "STARTING…",
@@ -56,7 +64,9 @@ export function HUD() {
   const { status, enable, disable, videoRef } = useHandTrackingAdapter();
   const currentGesture = useGestureStore((s) => s.currentGesture);
   const confidence = useGestureStore((s) => s.confidence);
-  const detectionFps = useGestureStore((s) => s.detectionFps);
+  const rateSample = useGestureStore((s) => s.handRate);
+  const [delegate, setDelegate] = useState<Delegate>(() => getPreferredDelegate());
+  const handRate = describeHandRate(status, rateSample);
   const errorMessage = useGestureStore((s) => s.errorMessage);
   const fps = useQualityStore((s) => s.fps);
   const tier = useQualityStore((s) => s.tier);
@@ -68,6 +78,24 @@ export function HUD() {
   const vitaVisible = useVitaStore((s) => s.visible);
   const cardStyle = useCardStyleStore((s) => s.style);
   useInteractionSounds();
+
+  /**
+   * Moves detection between the graphics card and the processor, and restarts
+   * tracking so the choice actually takes: the loaded model is cached, and a
+   * switch that left it in place would change the label and nothing else.
+   *
+   * Worth a control rather than a constant because "GPU" is not always the
+   * faster of the two. A second WebGL context beside the scene's can cost more
+   * per detection than the processor does, and which machine is which cannot
+   * be known from here — only measured, in the line above this one.
+   */
+  const swapDelegate = async () => {
+    const next: Delegate = delegate === "GPU" ? "CPU" : "GPU";
+    disable();
+    setPreferredDelegate(next);
+    setDelegate(next);
+    await enable();
+  };
 
   // Load the server's voice model while the user is still looking at the
   // scene, so the first spoken reply is not the one that waits for it.
@@ -129,6 +157,36 @@ export function HUD() {
           <span className={status === "active" ? "text-signal" : "text-frost"}>{STATUS_LABEL[status]}</span>
           <span className="text-mist/60"> (click to {status === "off" || status === "error" ? "enable" : "disable"})</span>
         </button>
+        {/* It sat in the far corner at ten grey pixels, and he was asked for it
+            twice without ever finding it. It belongs under the button that
+            turns tracking on, at a size that can be read out loud from where he
+            sits, because below about fifteen readings a second a gesture feels
+            dead however good the code is — and which of those two problems this
+            machine has cannot be told from the outside. */}
+        {handRate && (
+          <div className="mt-1 max-w-[320px]">
+            <div className={`text-lg tabular-nums tracking-wide ${RATE_TONE[handRate.tone]}`}>{handRate.text}</div>
+            {/* Ten readings a second because the camera sends ten, and ten
+                because the machine cannot look faster, are the same number
+                with opposite cures. This line says which — and it is printed
+                at a size that can be read out loud, because the first attempt
+                put it in ten grey pixels in a corner and it went unread
+                twice, which is the very mistake the rate itself was moved for. */}
+            {handRate.detail && (
+              <div className="text-sm tabular-nums tracking-wide text-frost/80">{handRate.detail}</div>
+            )}
+          </div>
+        )}
+        {status === "active" && (
+          <button
+            type="button"
+            onClick={() => void swapDelegate()}
+            className="block text-[11px] text-mist mt-1 hover:text-frost transition-colors cursor-pointer"
+          >
+            LOOKING WITH &mdash; <span className="text-frost">{delegate}</span>
+            <span className="text-mist/60"> (click to try {delegate === "GPU" ? "CPU" : "GPU"})</span>
+          </button>
+        )}
         {errorMessage && <div className="text-[10px] text-warn mt-1 max-w-[220px]">{errorMessage}</div>}
         <button
           type="button"
@@ -194,15 +252,6 @@ export function HUD() {
         <div className="text-[10px] text-mist tracking-wide">
           {status === "active" ? "HAND TRACKING ACTIVE" : "MOUSE FALLBACK ACTIVE"}
         </div>
-        {/* Below about fifteen readings a second a gesture feels dead however
-            good the code is, so the number is on screen rather than guessed. */}
-        {status === "active" && (
-          <div className="text-[10px] tracking-wide">
-            <span className={detectionFps > 0 && detectionFps < 15 ? "text-warn" : "text-mist"}>
-              {detectionFps > 0 ? `${detectionFps} HAND/S` : "measuring…"}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Centred: what was heard is feedback about the user's own speech, so it

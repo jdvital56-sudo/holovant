@@ -8,7 +8,7 @@ import {
   setGestureReading,
   setTrackingError,
   setLocked,
-  setDetectionFps,
+  setHandRate,
 } from "@/stores/gestureStore";
 import { HandTrackingEngine, describeTrackingError, type HandPoint } from "@/gestures/engine/handTracking";
 import { pinchDistance, isPinching, smoothDistance } from "@/gestures/classifiers/pinch";
@@ -161,10 +161,12 @@ export function useHandTrackingAdapter() {
   const enable = useCallback(async () => {
     if (engineRef.current || !videoRef.current) return;
     setTrackingStatus("starting");
+    // Nothing measured yet — not a rate of zero, and not last time's number.
+    setHandRate(null);
     const engine = new HandTrackingEngine();
     engineRef.current = engine;
     try {
-      await engine.start(videoRef.current, handleResult, setDetectionFps);
+      await engine.start(videoRef.current, handleResult, setHandRate);
       setTrackingStatus("active");
     } catch (err) {
       engine.stop();
@@ -179,7 +181,7 @@ export function useHandTrackingAdapter() {
     setLocked(false);
     setTrackingStatus("off");
     setGestureReading(null, 0);
-    setDetectionFps(0);
+    setHandRate(null);
   }, []);
 
   useEffect(() => () => engineRef.current?.stop(), []);

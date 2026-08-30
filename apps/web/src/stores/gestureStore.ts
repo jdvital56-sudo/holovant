@@ -1,3 +1,4 @@
+import type { HandRateSample } from "@/gestures/engine/rateMeter";
 import { create } from "zustand";
 
 export type TrackingStatus = "off" | "starting" | "active" | "error";
@@ -10,14 +11,15 @@ interface GestureState {
   /** A held pinch: the scene holds completely still, camera drift included. */
   locked: boolean;
   /**
-   * Hand readings per second, measured.
+   * Everything measured about the hand path: readings a second, what one
+   * reading cost, and what the camera promised. Null until the camera opens.
    *
-   * Shown because the difference between "tracking is broken" and "tracking is
+   * Held because the difference between "tracking is broken" and "tracking is
    * running at five readings a second" is invisible from the outside and
    * decides which of them to fix. Below about fifteen, gestures feel dead
-   * however good the rest of the code is.
+   * however good the rest of the code is — and he read back fifteen.
    */
-  detectionFps: number;
+  handRate: HandRateSample | null;
 }
 
 export const useGestureStore = create<GestureState>(() => ({
@@ -26,11 +28,11 @@ export const useGestureStore = create<GestureState>(() => ({
   confidence: 0,
   errorMessage: null,
   locked: false,
-  detectionFps: 0,
+  handRate: null,
 }));
 
-export function setDetectionFps(detectionFps: number) {
-  useGestureStore.setState({ detectionFps });
+export function setHandRate(handRate: HandRateSample | null) {
+  useGestureStore.setState({ handRate });
 }
 
 export function setLocked(locked: boolean) {
