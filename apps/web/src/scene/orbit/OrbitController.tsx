@@ -27,10 +27,15 @@ const RADIUS = 5.2;
  * stops and the orbit keeps spinning, so it reads as out of control rather than
  * as being steered.
  *
- * Stiff enough to arrive within a fifth of a second, damped past oscillation,
- * so the carousel stands still the moment the hand does.
+ * Stiff enough to arrive in about six tenths of a second, damped past
+ * oscillation, so the carousel stands still very nearly when the hand does.
+ *
+ * It was stiffer still, and that stiffness sent the value to infinity the
+ * moment the frame rate dropped — the carousel span too fast to see. The
+ * integrator no longer permits that, and this is chosen for how it feels
+ * rather than for what it can survive.
  */
-const HAND_SPRING = { tension: 900, friction: 60 };
+const HAND_SPRING = { tension: 500, friction: 50 };
 
 export function OrbitController() {
   const targetRotation = useOrbitStore((s) => s.rotation);
