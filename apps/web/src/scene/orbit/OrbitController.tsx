@@ -5,6 +5,7 @@ import { moduleRegistry } from "@/modules/registry";
 import { loadAllModuleData, refreshModuleData } from "@/modules/moduleDataStore";
 import { usePlayStore } from "@/voice/playMusic";
 import { usePlaylistStore } from "@/voice/playlistStore";
+import { useGestureStore } from "@/stores/gestureStore";
 import { useOrbitStore } from "@/stores/orbitStore";
 import { useSpringNumber } from "@/motion/useSpringNumber";
 import { CardSprings } from "@holovant/motion-vocabulary";
@@ -17,9 +18,24 @@ import { HolographicCard } from "../cards/HolographicCard";
  */
 const RADIUS = 5.2;
 
+/**
+ * How the orbit follows a hand, as opposed to a mouse.
+ *
+ * The soft idle spring carries about a second and a half of travel after its
+ * target stops moving. Behind a mouse drag that lag is the point — the carousel
+ * has weight and coasts. Behind a hand it is the whole complaint: the hand
+ * stops and the orbit keeps spinning, so it reads as out of control rather than
+ * as being steered.
+ *
+ * Stiff enough to arrive within a fifth of a second, damped past oscillation,
+ * so the carousel stands still the moment the hand does.
+ */
+const HAND_SPRING = { tension: 900, friction: 60 };
+
 export function OrbitController() {
   const targetRotation = useOrbitStore((s) => s.rotation);
-  const rotationDeg = useSpringNumber(targetRotation, CardSprings.idle);
+  const handTracking = useGestureStore((s) => s.status) === "active";
+  const rotationDeg = useSpringNumber(targetRotation, handTracking ? HAND_SPRING : CardSprings.idle);
   const step = 360 / moduleRegistry.length;
 
   useEffect(() => {

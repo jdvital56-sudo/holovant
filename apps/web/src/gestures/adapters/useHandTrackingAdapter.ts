@@ -13,8 +13,31 @@ import {
 import { HandTrackingEngine, describeTrackingError, type HandPoint } from "@/gestures/engine/handTracking";
 import { pinchDistance, isPinching, smoothDistance } from "@/gestures/classifiers/pinch";
 
-/** Degrees of carousel travel per full frame-width of hand movement. */
-const ROTATION_SENSITIVITY = 360;
+/**
+ * Degrees of carousel travel per full frame-width of hand movement.
+ *
+ * Was 360 — a whole revolution, all sixteen cards, for one sweep of the hand,
+ * and half a sweep still threw eight cards past. Movement was already
+ * one-to-one with the hand; there was simply far too much of it per centimetre.
+ * At 170 a comfortable sweep moves four or five cards, which is a shelf being
+ * pushed rather than a wheel being spun.
+ */
+const ROTATION_SENSITIVITY = 170;
+
+/**
+ * A ceiling on how fast the carousel may be driven, however the readings
+ * arrive. A detection stall followed by a hand somewhere else would otherwise
+ * arrive as one enormous step and fling the orbit.
+ */
+const MAX_DEGREES_PER_SECOND = 900;
+
+/**
+ * A reading or two may go missing mid-sweep without it counting as the hand
+ * leaving. Treating every dropped frame as a departure threw away the position
+ * the movement was being measured from, and the sweep died in the middle —
+ * which is the "sometimes it does not react at all" half of the complaint.
+ */
+const LOST_HAND_GRACE_MS = 320;
 /** Below this, movement is hand tremor rather than intent. */
 const DEADZONE = 0.0025;
 
@@ -53,6 +76,11 @@ export function useHandTrackingAdapter() {
     const now = performance.now();
 
     if (!hand) {
+      // A brief gap is a missed reading, not a hand leaving. Only after the
+      // grace period is the reference position given up.
+      const goneFor = lastSampleAt.current ? now - lastSampleAt.current : Infinity;
+      if (goneFor < LOST_HAND_GRACE_MS) return;
+
       lastX.current = null;
       lastSampleAt.current = 0;
       wasPinching.current = false;
@@ -111,7 +139,10 @@ export function useHandTrackingAdapter() {
       if (Math.abs(dx) > DEADZONE && Math.abs(dx) < plausible) {
         // Negated: the camera sees the user mirrored, so a hand moving to the
         // user's right travels toward lower x in the image.
-        useOrbitStore.setState((s) => ({ rotation: s.rotation - dx * ROTATION_SENSITIVITY }));
+        const wanted = dx * ROTATION_SENSITIVITY;
+        const ceiling = MAX_DEGREES_PER_SECOND * Math.min(0.5, Math.max(0.016, elapsed));
+        const step = Math.sign(wanted) * Math.min(Math.abs(wanted), ceiling);
+        useOrbitStore.setState((s) => ({ rotation: s.rotation - step }));
         if (now - lastReadoutAt.current > READOUT_INTERVAL_MS) {
           lastReadoutAt.current = now;
           const speed = Math.min(1, Math.abs(dx) / 0.03);
