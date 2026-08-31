@@ -1,5 +1,6 @@
 import { notesForDay, openTasks, type BrainNote, type NoteTask } from "./brain";
 import { fetchEventsForDay, isCalendarConnected, type CalendarEvent } from "./calendar";
+import { getUserPlace } from "./userMemory";
 import { fetchWeather } from "./weather";
 
 /**
@@ -51,10 +52,13 @@ function clock(at: Date): string {
  */
 export async function gatherBriefing(options: { place?: string; day?: Date } = {}): Promise<Briefing> {
   const day = options.day ?? new Date();
+  // He travels and says so out loud; the city he last named is the one the
+  // weather is for, without him being asked again every morning.
+  const place = options.place ?? (await getUserPlace().catch(() => null));
 
   const [weather, events, notes, tasks] = await Promise.all([
-    options.place
-      ? fetchWeather({ place: options.place, lang: "ru" })
+    place
+      ? fetchWeather({ place, lang: "ru" })
           .then((w) => `${w.place}: ${w.temperature}°C, сегодня от ${w.low}°C до ${w.high}°C`)
           .catch(() => null)
       : Promise.resolve(null),

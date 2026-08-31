@@ -92,6 +92,10 @@ function systemPrompt(
       "asked, not what you just looked up, not anything true only today. If in doubt, do not,",
       "because a wrong conclusion is repeated in every answer from then on.",
       "When they tell you something you believed is wrong, call forget_about_user.",
+      // He travels and will say where he is rather than editing a setting.
+      "When they say where they are — “я сейчас в Аланье”, “я в Стамбуле на неделю” — call",
+      "set_location. It replaces where they were, and the weather and the briefing follow it.",
+      "Never infer their city from a timezone, a language or a guess; only from what they say.",
       "Never say you have remembered or forgotten something unless you called the tool for it in",
       "this same turn.",
       "Do not announce that you are remembering something; just do it and answer them.",

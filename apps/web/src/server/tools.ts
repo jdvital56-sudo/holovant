@@ -15,7 +15,7 @@ import { searchWeb, isSearchConfigured } from "./webSearch";
 import { fetchWeather } from "./weather";
 import { searchBrain, isBrainConnected } from "./brain";
 import { briefingToText, gatherBriefing } from "./briefing";
-import { forgetAboutUser, rememberAboutUser } from "./userMemory";
+import { forgetAboutUser, getUserPlace, rememberAboutUser, setUserPlace } from "./userMemory";
 import { isSafeUrl, type QueuedAction } from "./actionTypes";
 
 export interface ToolDefinition {
@@ -79,16 +79,18 @@ export function toolsFor(lang: "ru" | "en"): ToolDefinition[] {
       function: {
         name: "get_weather",
         description:
-          "Current weather and today's high and low for a place. Use for any weather question.",
+          "Current weather and today's high and low for a place. Use for any weather question. " +
+          "Leave the place out when they just ask about “the weather”: it falls back to the city " +
+          "they last said they were in, which is better than asking them again.",
         parameters: {
           type: "object",
           properties: {
             place: {
               type: "string",
-              description: "City or place name, for example “Киев” or “Barcelona”.",
+              description:
+                "City or place name, for example “Аланья” or “Barcelona”. Omit for where they are.",
             },
           },
-          required: ["place"],
         },
       },
     },
@@ -125,6 +127,24 @@ export function toolsFor(lang: "ru" | "en"): ToolDefinition[] {
                 "out if you do not know, and the briefing will say so.",
             },
           },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "set_location",
+        description:
+          "Record where the user is now, whenever they say it — “я сейчас в Аланье”, “я в " +
+          "Стамбуле на неделю”, or anywhere they mention having moved. It replaces wherever " +
+          "they were before, and the weather and the morning briefing use it from then on " +
+          "without asking. Do not guess it from a timezone or a language; only from them.",
+        parameters: {
+          type: "object",
+          properties: {
+            place: { type: "string", description: "City, and country if they gave one." },
+          },
+          required: ["place"],
         },
       },
     },
@@ -225,8 +245,11 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
       }
 
       case "get_weather": {
-        const place = typeof args.place === "string" ? args.place : "";
-        if (!place) return "No place was given.";
+        // Asked for "the weather" with no place, it means where he is — which
+        // he has told the assistant rather than typed into a setting.
+        const asked = typeof args.place === "string" ? args.place.trim() : "";
+        const place = asked || (await getUserPlace()) || "";
+        if (!place) return "No place was given, and the user has not said where they are.";
         const w = await fetchWeather({ place, lang: "ru" });
         const condition = CONDITIONS[w.code] ?? "";
         return [
@@ -261,6 +284,12 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
       case "morning_briefing": {
         const place = typeof args.place === "string" && args.place.trim() ? args.place.trim() : undefined;
         return briefingToText(await gatherBriefing({ place }));
+      }
+
+      case "set_location": {
+        const place = typeof args.place === "string" ? args.place : "";
+        const result = await setUserPlace(place);
+        return result.stored ? `Noted: ${place}.` : `Not stored. ${result.reason}`;
       }
 
       case "remember_about_user": {

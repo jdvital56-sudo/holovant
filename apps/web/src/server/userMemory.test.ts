@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { searchBrain } from "@/server/brain";
 import {
   forgetAboutUser,
+  getUserPlace,
+  setUserPlace,
   readUserMemory,
   rememberAboutUser,
   summariseForPrompt,
@@ -266,5 +268,76 @@ describe("what must not take the assistant down with it", () => {
     expect(raw).toContain("Мои собственные пометки сверху.");
     expect(raw).toContain("Терминал мне тяжёл");
     expect(raw).toContain("заговаривала");
+  });
+});
+
+describe("where he is right now", () => {
+  /**
+   * He travels, and he will say so out loud rather than editing a setting:
+   * "я сейчас в Аланье". That makes the place a different kind of fact from
+   * the rest — there is only ever one of it, and the new one is not an
+   * addition but a correction.
+   */
+
+  it("keeps the city he named", async () => {
+    await setUserPlace("Аланья, Турция");
+    expect(await getUserPlace()).toBe("Аланья, Турция");
+  });
+
+  it("replaces it when he moves, instead of remembering both", async () => {
+    // The failure this is built against: a month of travel leaving four
+    // cities in the file and the weather answering for whichever was found
+    // first. There is one answer to "where are you", and it is the last one.
+    await setUserPlace("Аланья, Турция");
+    await setUserPlace("Стамбул");
+    expect(await getUserPlace()).toBe("Стамбул");
+    const facts = await readUserMemory();
+    expect(facts.filter((f) => f.text.startsWith("Город"))).toHaveLength(1);
+  });
+
+  it("writes it as a line he can read and correct like any other", async () => {
+    await setUserPlace("Аланья, Турция");
+    const [fact] = await readUserMemory();
+    expect(fact.text).toBe("Город: Аланья, Турция");
+  });
+
+  it("replaces it even when the model records it as an ordinary conclusion", async () => {
+    // The model has two ways to say this and only one of them is the tool.
+    await setUserPlace("Аланья, Турция");
+    await rememberAboutUser("Город: Анталья");
+    expect(await getUserPlace()).toBe("Анталья");
+    expect(await readUserMemory()).toHaveLength(1);
+  });
+
+  it("does not touch anything else he is remembered for", async () => {
+    // The other direction, and the one a single-valued rule gets wrong: only
+    // the city is single. Everything else still accumulates.
+    await rememberAboutUser("Терминал ему тяжёл, лучше делать самому");
+    await setUserPlace("Аланья, Турция");
+    await rememberAboutUser("Не хочет, чтобы система заговаривала первой");
+    await setUserPlace("Стамбул");
+
+    const facts = await readUserMemory();
+    expect(facts).toHaveLength(3);
+    expect(await getUserPlace()).toBe("Стамбул");
+    expect(facts.some((f) => f.text.includes("Терминал"))).toBe(true);
+    expect(facts.some((f) => f.text.includes("заговаривала"))).toBe(true);
+  });
+
+  it("has no city until he names one", async () => {
+    // And says so, rather than guessing from a timezone.
+    expect(await getUserPlace()).toBeNull();
+  });
+
+  it("can be forgotten like anything else", async () => {
+    await setUserPlace("Аланья, Турция");
+    await forgetAboutUser("город");
+    expect(await getUserPlace()).toBeNull();
+  });
+
+  it("refuses an empty city rather than remembering a blank", async () => {
+    await setUserPlace("Аланья, Турция");
+    await setUserPlace("   ");
+    expect(await getUserPlace()).toBe("Аланья, Турция");
   });
 });

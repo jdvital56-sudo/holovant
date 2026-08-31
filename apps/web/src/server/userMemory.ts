@@ -38,6 +38,20 @@ const MIN_FACT_CHARS = 8;
  */
 const MAX_FACT_CHARS = 200;
 
+/**
+ * Where he is right now, which is a different kind of fact from the rest.
+ *
+ * He travels, and he says so out loud rather than editing a setting: "я сейчас
+ * в Аланье". There is only ever one answer to that, so a new city is a
+ * correction and not an addition — a month of travel must not leave four of
+ * them in the file with the weather answering for whichever was found first.
+ *
+ * It is a labelled line in the same file rather than a store of its own, so he
+ * reads and corrects it exactly like everything else there.
+ */
+const PLACE_LABEL = "Город";
+const PLACE_PREFIX = `${PLACE_LABEL}: `;
+
 const FILE_NAME = "О пользователе.md";
 const FOLDER = "Holovant";
 const HEADING = "# Что ассистент знает обо мне";
@@ -133,6 +147,11 @@ export interface RememberResult {
  */
 export async function rememberAboutUser(fact: string): Promise<RememberResult> {
   const text = fact.trim().replace(/\s+/g, " ");
+  // The model has two ways to record a city and only one of them is the tool
+  // for it. Both must replace the old one, or the wrong door leaves two.
+  if (text.toLowerCase().startsWith(PLACE_PREFIX.toLowerCase())) {
+    return setUserPlace(text.slice(PLACE_PREFIX.length));
+  }
   if (text.length < MIN_FACT_CHARS) return { stored: false, reason: "Too short to be a conclusion." };
   if (text.length > MAX_FACT_CHARS) {
     return { stored: false, reason: "Too long — a conclusion, not a retelling of what was said." };
@@ -157,6 +176,34 @@ export async function rememberAboutUser(fact: string): Promise<RememberResult> {
   facts.push({ text, learnedAt: new Date().toISOString() });
   await writeUserMemory(facts.slice(-MAX_FACTS));
   return { stored: true, reason: "Noted." };
+}
+
+/**
+ * Records where he is now, replacing wherever he was before.
+ *
+ * The one fact in here that is single-valued: the weather and the briefing use
+ * it without asking him again, and two of them would mean answering for a city
+ * he left.
+ */
+export async function setUserPlace(place: string): Promise<RememberResult> {
+  const text = place.trim().replace(/\s+/g, " ");
+  if (!text) return { stored: false, reason: "No place was given." };
+
+  const facts = (await readUserMemory()).filter(
+    (fact) => !fact.text.toLowerCase().startsWith(PLACE_PREFIX.toLowerCase()),
+  );
+  facts.push({ text: `${PLACE_PREFIX}${text}`, learnedAt: new Date().toISOString() });
+  await writeUserMemory(facts.slice(-MAX_FACTS));
+  return { stored: true, reason: `Now in ${text}.` };
+}
+
+/** Where he last said he was, or null — never guessed from a timezone. */
+export async function getUserPlace(): Promise<string | null> {
+  const facts = await readUserMemory();
+  const line = [...facts]
+    .reverse()
+    .find((fact) => fact.text.toLowerCase().startsWith(PLACE_PREFIX.toLowerCase()));
+  return line ? line.text.slice(PLACE_PREFIX.length).trim() || null : null;
 }
 
 export interface ForgetResult {
