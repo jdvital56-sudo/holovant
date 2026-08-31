@@ -96,6 +96,7 @@ function systemPrompt(
       "When they say where they are — “я сейчас в Аланье”, “я в Стамбуле на неделю” — call",
       "set_location. It replaces where they were, and the weather and the briefing follow it.",
       "Never infer their city from a timezone, a language or a guess; only from what they say.",
+      "When they say what to follow in the news, call set_news_topics the same way.",
       "Never say you have remembered or forgotten something unless you called the tool for it in",
       "this same turn.",
       "Do not announce that you are remembering something; just do it and answer them.",

@@ -1,6 +1,6 @@
 import type { ModuleDefinition } from "@holovant/module-contracts";
-import type { DayWeather } from "@/app/api/day/route";
-import { createDayProvider } from "@/lib/createDayProvider";
+import type { CardsWeather } from "@/app/api/cards/route";
+import { createCardProvider } from "@/lib/createCardProvider";
 
 /**
  * Real weather, for the city he last said he was in.
@@ -11,7 +11,7 @@ import { createDayProvider } from "@/lib/createDayProvider";
  * able to reach the forecast are different things, and both are different from
  * a mild day.
  */
-export type WeatherSnapshot = DayWeather;
+export type WeatherSnapshot = CardsWeather;
 
 const UNKNOWN = "—";
 
@@ -27,7 +27,7 @@ export const weatherModule: ModuleDefinition<WeatherSnapshot> = {
   label: "Weather",
   tagline: "Current conditions",
   themeColor: "#57bfe1",
-  dataProvider: createDayProvider<WeatherSnapshot>("weather", {
+  dataProvider: createCardProvider<WeatherSnapshot>("weather", {
     state: "unreachable",
     place: null,
     temperatureC: null,

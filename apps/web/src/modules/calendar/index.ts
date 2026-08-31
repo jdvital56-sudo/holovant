@@ -1,6 +1,7 @@
 import type { ModuleDefinition } from "@holovant/module-contracts";
-import type { DayCalendar } from "@/app/api/day/route";
-import { createDayProvider } from "@/lib/createDayProvider";
+import type { CardsCalendar } from "@/app/api/cards/route";
+import { createCardProvider } from "@/lib/createCardProvider";
+import { pluralRu } from "@/voice/russianNumbers";
 
 /**
  * His real calendar, through the private iCal address.
@@ -11,7 +12,7 @@ import { createDayProvider } from "@/lib/createDayProvider";
  * inside the code both are an empty list, and only one of them means he has
  * nothing on.
  */
-export type CalendarSnapshot = DayCalendar;
+export type CalendarSnapshot = CardsCalendar;
 
 const UNKNOWN = "—";
 
@@ -20,7 +21,7 @@ export const calendarModule: ModuleDefinition<CalendarSnapshot> = {
   label: "Calendar",
   tagline: "Today's schedule",
   themeColor: "#59b5e5",
-  dataProvider: createDayProvider<CalendarSnapshot>("calendar", {
+  dataProvider: createCardProvider<CalendarSnapshot>("calendar", {
     state: "unreachable",
     eventsToday: null,
     nextEvent: null,
@@ -40,7 +41,14 @@ export const calendarModule: ModuleDefinition<CalendarSnapshot> = {
       ];
     }
     return [
-      { label: "Сегодня", value: d.eventsToday === 0 ? "встреч нет" : `${d.eventsToday}` },
+      d.eventsToday
+        ? {
+            // The label sits under the number on the card and has to agree with
+            // it: "2 встречи", never "2 встреч".
+            label: pluralRu(d.eventsToday, ["Встреча", "Встречи", "Встреч"]),
+            value: `${d.eventsToday}`,
+          }
+        : { label: "Сегодня", value: "встреч нет" },
       { label: "Ближайшее", value: d.nextEvent ?? "ничего не запланировано" },
     ];
   },

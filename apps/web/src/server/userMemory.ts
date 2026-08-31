@@ -50,7 +50,19 @@ const MAX_FACT_CHARS = 200;
  * reads and corrects it exactly like everything else there.
  */
 const PLACE_LABEL = "Город";
-const PLACE_PREFIX = `${PLACE_LABEL}: `;
+
+/**
+ * Labels there is only ever one answer to. A second one is a correction, not
+ * an addition — a month of travel must not leave four cities in the file with
+ * the weather answering for whichever was found first, and the same goes for
+ * what he wants watched in the news.
+ */
+const SINGLE_VALUED = [PLACE_LABEL, "Темы"] as const;
+export type SingleFact = (typeof SINGLE_VALUED)[number];
+
+const prefixOf = (label: string) => `${label}: `;
+const startsWithLabel = (text: string, label: string) =>
+  text.toLowerCase().startsWith(prefixOf(label).toLowerCase());
 
 const FILE_NAME = "О пользователе.md";
 const FOLDER = "Holovant";
@@ -147,11 +159,10 @@ export interface RememberResult {
  */
 export async function rememberAboutUser(fact: string): Promise<RememberResult> {
   const text = fact.trim().replace(/\s+/g, " ");
-  // The model has two ways to record a city and only one of them is the tool
+  // The model has two ways to record these and only one of them is the tool
   // for it. Both must replace the old one, or the wrong door leaves two.
-  if (text.toLowerCase().startsWith(PLACE_PREFIX.toLowerCase())) {
-    return setUserPlace(text.slice(PLACE_PREFIX.length));
-  }
+  const labelled = SINGLE_VALUED.find((label) => startsWithLabel(text, label));
+  if (labelled) return setSingleFact(labelled, text.slice(prefixOf(labelled).length));
   if (text.length < MIN_FACT_CHARS) return { stored: false, reason: "Too short to be a conclusion." };
   if (text.length > MAX_FACT_CHARS) {
     return { stored: false, reason: "Too long — a conclusion, not a retelling of what was said." };
@@ -178,33 +189,34 @@ export async function rememberAboutUser(fact: string): Promise<RememberResult> {
   return { stored: true, reason: "Noted." };
 }
 
-/**
- * Records where he is now, replacing wherever he was before.
- *
- * The one fact in here that is single-valued: the weather and the briefing use
- * it without asking him again, and two of them would mean answering for a city
- * he left.
- */
-export async function setUserPlace(place: string): Promise<RememberResult> {
-  const text = place.trim().replace(/\s+/g, " ");
-  if (!text) return { stored: false, reason: "No place was given." };
+/** Records one of the single-valued facts, replacing whatever it said before. */
+export async function setSingleFact(label: SingleFact, value: string): Promise<RememberResult> {
+  const text = value.trim().replace(/\s+/g, " ");
+  if (!text) return { stored: false, reason: `No ${label.toLowerCase()} was given.` };
 
-  const facts = (await readUserMemory()).filter(
-    (fact) => !fact.text.toLowerCase().startsWith(PLACE_PREFIX.toLowerCase()),
-  );
-  facts.push({ text: `${PLACE_PREFIX}${text}`, learnedAt: new Date().toISOString() });
+  const facts = (await readUserMemory()).filter((fact) => !startsWithLabel(fact.text, label));
+  facts.push({ text: `${prefixOf(label)}${text}`, learnedAt: new Date().toISOString() });
   await writeUserMemory(facts.slice(-MAX_FACTS));
-  return { stored: true, reason: `Now in ${text}.` };
+  return { stored: true, reason: `${label}: ${text}.` };
 }
 
-/** Where he last said he was, or null — never guessed from a timezone. */
-export async function getUserPlace(): Promise<string | null> {
+/** The last value of one, or null. Never guessed — only what he said. */
+export async function getSingleFact(label: SingleFact): Promise<string | null> {
   const facts = await readUserMemory();
-  const line = [...facts]
-    .reverse()
-    .find((fact) => fact.text.toLowerCase().startsWith(PLACE_PREFIX.toLowerCase()));
-  return line ? line.text.slice(PLACE_PREFIX.length).trim() || null : null;
+  const line = [...facts].reverse().find((fact) => startsWithLabel(fact.text, label));
+  return line ? line.text.slice(prefixOf(label).length).trim() || null : null;
 }
+
+/**
+ * Where he is now. He travels and says so out loud rather than editing a
+ * setting, and the weather and the briefing follow it without asking again.
+ */
+export const setUserPlace = (place: string) => setSingleFact(PLACE_LABEL, place);
+export const getUserPlace = () => getSingleFact(PLACE_LABEL);
+
+/** What he wants watched in the news, as he phrased it. */
+export const setNewsTopics = (topics: string) => setSingleFact("Темы", topics);
+export const getNewsTopics = () => getSingleFact("Темы");
 
 export interface ForgetResult {
   /** The conclusion that was removed, or null when there was no such thing. */

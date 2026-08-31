@@ -329,6 +329,29 @@ export async function openTasks(limit = 8): Promise<NoteTask[]> {
   return tasks;
 }
 
+/**
+ * What the second-brain card shows: how much is in there and what he has been
+ * writing lately.
+ *
+ * Reads the cached index rather than walking the vault, because this is a card
+ * that gets polled — and a card is not a reason to re-read a thousand files.
+ */
+export async function brainSummary(recentLimit = 3): Promise<{
+  connected: boolean;
+  noteCount: number;
+  recent: string[];
+}> {
+  const root = brainRoot();
+  if (!root) return { connected: false, noteCount: 0, recent: [] };
+
+  const notes = await loadIndex(root);
+  const recent = [...notes]
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .slice(0, recentLimit)
+    .map((note) => note.title);
+  return { connected: true, noteCount: notes.length, recent };
+}
+
 export async function brainStats(): Promise<{ connected: boolean; noteCount: number }> {
   const root = brainRoot();
   if (!root) return { connected: false, noteCount: 0 };

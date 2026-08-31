@@ -15,7 +15,13 @@ import { searchWeb, isSearchConfigured } from "./webSearch";
 import { fetchWeather } from "./weather";
 import { searchBrain, isBrainConnected } from "./brain";
 import { briefingToText, gatherBriefing } from "./briefing";
-import { forgetAboutUser, getUserPlace, rememberAboutUser, setUserPlace } from "./userMemory";
+import {
+  forgetAboutUser,
+  getUserPlace,
+  rememberAboutUser,
+  setNewsTopics,
+  setUserPlace,
+} from "./userMemory";
 import { isSafeUrl, type QueuedAction } from "./actionTypes";
 
 export interface ToolDefinition {
@@ -145,6 +151,24 @@ export function toolsFor(lang: "ru" | "en"): ToolDefinition[] {
             place: { type: "string", description: "City, and country if they gave one." },
           },
           required: ["place"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "set_news_topics",
+        description:
+          "Record what the user wants followed in the news — “следи за новостями про " +
+          "недвижимость и ИИ”. It replaces whatever was being followed before, and the news " +
+          "card reads it. Until they say, the card stays empty rather than showing whatever " +
+          "the internet is loudest about.",
+        parameters: {
+          type: "object",
+          properties: {
+            topics: { type: "string", description: "The subjects, in their own words." },
+          },
+          required: ["topics"],
         },
       },
     },
@@ -290,6 +314,12 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
         const place = typeof args.place === "string" ? args.place : "";
         const result = await setUserPlace(place);
         return result.stored ? `Noted: ${place}.` : `Not stored. ${result.reason}`;
+      }
+
+      case "set_news_topics": {
+        const topics = typeof args.topics === "string" ? args.topics : "";
+        const result = await setNewsTopics(topics);
+        return result.stored ? `Watching: ${topics}.` : `Not stored. ${result.reason}`;
       }
 
       case "remember_about_user": {

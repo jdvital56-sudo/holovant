@@ -1,56 +1,63 @@
 import type { ModuleDefinition } from "@holovant/module-contracts";
-import { createMockProvider } from "@/lib/createMockProvider";
-
-export interface BrainSnapshot {
-  connected: boolean;
-  noteCount: number;
-}
+import type { CardsBrain } from "@/app/api/cards/route";
+import { createCardProvider } from "@/lib/createCardProvider";
+import { pluralRu } from "@/voice/russianNumbers";
 
 /**
  * The customer's own knowledge, connected as a folder of notes.
  *
  * Ships empty on purpose: the product provides the socket, and whoever buys it
- * plugs their own knowledge into it. An unconnected module says how to connect
- * one rather than showing invented contents.
+ * plugs their own knowledge into it. It used to report zero notes when nothing
+ * was connected, which reads as an empty vault rather than as no vault — and
+ * those two want opposite things from whoever is looking.
  */
+export type BrainSnapshot = CardsBrain;
+
+const UNKNOWN = "—";
+
 export const brainModule: ModuleDefinition<BrainSnapshot> = {
   id: "brain",
   label: "Second Brain",
   tagline: "Your own knowledge",
   themeColor: "#a978ff",
-  dataProvider: createMockProvider<BrainSnapshot>({ connected: false, noteCount: 0 }),
-  toMetrics: (d) => [
-    { label: "Status", value: d.connected ? "connected" : "not connected" },
-    { label: "Notes", value: d.connected ? String(d.noteCount) : "—" },
-  ],
+  dataProvider: createCardProvider<BrainSnapshot>("brain", {
+    state: "not-connected",
+    noteCount: null,
+    recent: [],
+  }),
+  toMetrics: (d) => {
+    if (d.state !== "ok" || d.noteCount === null) {
+      return [
+        { label: "Хранилище", value: "не подключено" },
+        { label: "Заметки", value: UNKNOWN },
+      ];
+    }
+    return [
+      // The label sits under the number on the card, so it has to agree with
+      // it: "82 заметки", not "82 заметок". Said aloud, the wrong form is the
+      // difference between a product and a toy.
+      { label: pluralRu(d.noteCount, ["Заметка", "Заметки", "Заметок"]), value: `${d.noteCount}` },
+      { label: "Последнее", value: d.recent[0] ?? "ничего не менялось" },
+      { label: "До этого", value: d.recent.slice(1).join(", ") || UNKNOWN },
+    ];
+  },
   toAdvice: (d, lang) => {
-    if (!d.connected) {
+    if (d.state !== "ok" || d.noteCount === null) {
       const tips =
         lang === "ru"
-          ? [
-              "Хранилище знаний не подключено",
-              "Укажите папку с заметками в настройке HOLOVANT_BRAIN_PATH",
-              "Подойдёт любая папка с файлами Markdown — например хранилище Obsidian",
-            ]
-          : [
-              "No knowledge base is connected",
-              "Point HOLOVANT_BRAIN_PATH at a folder of notes",
-              "Any folder of Markdown works — an Obsidian vault, for instance",
-            ];
+          ? ["Хранилище заметок не подключено", "Укажите папку с заметками, и она появится здесь"]
+          : ["No notes folder connected", "Point the app at one and it fills itself in"];
       return { spoken: tips[0], tips };
     }
-
     const tips =
       lang === "ru"
         ? [
-            `Подключено, ${d.noteCount} заметок`,
-            "Спросите «что я знаю про …» — отвечу по вашим записям",
-            "Ассистент опирается на эти заметки, когда они относятся к вопросу",
+            `${d.noteCount} заметок, последняя — ${d.recent[0] ?? "неизвестно"}`,
+            "Спросите вслух — ответы берутся отсюда прежде, чем из общих знаний",
           ]
         : [
-            `Connected, ${d.noteCount} notes`,
-            "Ask “what do I know about …” and the answer comes from your notes",
-            "The assistant draws on them whenever they bear on the question",
+            `${d.noteCount} notes, most recent is ${d.recent[0] ?? "unknown"}`,
+            "Ask out loud — answers come from here before general knowledge",
           ];
     return { spoken: tips[0], tips };
   },
