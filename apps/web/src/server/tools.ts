@@ -14,6 +14,8 @@
 import { searchWeb, isSearchConfigured } from "./webSearch";
 import { fetchWeather } from "./weather";
 import { searchBrain, isBrainConnected } from "./brain";
+import { briefingToText, gatherBriefing } from "./briefing";
+import { forgetAboutUser, rememberAboutUser } from "./userMemory";
 import { isSafeUrl, type QueuedAction } from "./actionTypes";
 
 export interface ToolDefinition {
@@ -102,6 +104,74 @@ export function toolsFor(lang: "ru" | "en"): ToolDefinition[] {
     },
   ];
 
+  tools.push(
+    {
+      type: "function",
+      function: {
+        name: "morning_briefing",
+        description:
+          "Everything true about today in one call: the date, the weather, the user's calendar, " +
+          "notes written against today's date, and what is still unticked in their notes. Use it " +
+          "when they ask what the day looks like, for a briefing, or what is on today. It tells " +
+          "you plainly what it could not see — say that rather than filling it in. Follow it with " +
+          "a web search when news on their own subjects would belong in the answer.",
+        parameters: {
+          type: "object",
+          properties: {
+            place: {
+              type: "string",
+              description:
+                "The city to give weather for. Pass what you know of where they live; leave it " +
+                "out if you do not know, and the briefing will say so.",
+            },
+          },
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "remember_about_user",
+        description:
+          "Record one lasting conclusion about the user — how they work, what they are building, " +
+          "what they prefer, what they have decided. Use it when you learn something that will " +
+          "still be true next week and would change how you answer then. Not for the passing " +
+          "content of this conversation: not what they just asked, not what you just looked up, " +
+          "not anything true only today. One short sentence, in their own language. If in doubt, " +
+          "do not: a wrong conclusion is repeated in every answer from now on.",
+        parameters: {
+          type: "object",
+          properties: {
+            fact: {
+              type: "string",
+              description: "The conclusion, as one short sentence about the user.",
+            },
+          },
+          required: ["fact"],
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "forget_about_user",
+        description:
+          "Remove something you concluded about the user, when they say it is wrong or ask you " +
+          "to forget it. Give roughly the wording of the thing to drop.",
+        parameters: {
+          type: "object",
+          properties: {
+            fact: { type: "string", description: "Roughly what to forget." },
+            everything: {
+              type: "boolean",
+              description: "True only when they ask you to forget everything you know about them.",
+            },
+          },
+        },
+      },
+    },
+  );
+
   if (isBrainConnected()) {
     tools.push({
       type: "function",
@@ -186,6 +256,34 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
         const notes = await searchBrain(query, 4);
         if (!notes.length) return `Nothing in the notes about “${query}”.`;
         return notes.map((n) => `# ${n.title}\n${n.excerpt}`).join("\n\n");
+      }
+
+      case "morning_briefing": {
+        const place = typeof args.place === "string" && args.place.trim() ? args.place.trim() : undefined;
+        return briefingToText(await gatherBriefing({ place }));
+      }
+
+      case "remember_about_user": {
+        const fact = typeof args.fact === "string" ? args.fact : "";
+        if (!fact) return "No conclusion was given.";
+        const result = await rememberAboutUser(fact);
+        // The outcome is reported rather than assumed. A refusal the model
+        // reads as success becomes "я запомнил" over a file that never
+        // changed, which is the same lie as describing an action not taken.
+        return result.stored ? `Remembered: ${fact}` : `Not stored. ${result.reason}`;
+      }
+
+      case "forget_about_user": {
+        if (args.everything === true) {
+          await forgetAboutUser(null);
+          return "Forgotten everything about the user.";
+        }
+        const fact = typeof args.fact === "string" ? args.fact : "";
+        if (!fact) return "Nothing was named to forget.";
+        const result = await forgetAboutUser(fact);
+        return result.removed
+          ? `Forgotten: ${result.removed}`
+          : `There was nothing remembered about “${fact}”.`;
       }
 
       default:

@@ -241,6 +241,94 @@ export async function searchBrain(query: string, limit = 5): Promise<BrainNote[]
   return scored.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
+/** The ways he actually writes a date, all of which have to match. */
+function dateSpellings(day: Date): string[] {
+  const months = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+  ];
+  const dd = String(day.getDate()).padStart(2, "0");
+  const mm = String(day.getMonth() + 1).padStart(2, "0");
+  const yyyy = day.getFullYear();
+  return [
+    `${yyyy}-${mm}-${dd}`,
+    `${dd}.${mm}.${yyyy}`,
+    `${dd}.${mm}`,
+    `${day.getDate()} ${months[day.getMonth()]}`,
+  ];
+}
+
+/**
+ * Notes that speak about one particular day.
+ *
+ * Matched on the text of the date rather than the file's age: a note written
+ * last week about today's meeting is exactly what a morning briefing is for,
+ * and one edited this morning about something else is not.
+ */
+export async function notesForDay(day: Date, limit = 4): Promise<BrainNote[]> {
+  const root = brainRoot();
+  if (!root) return [];
+
+  const spellings = dateSpellings(day).map((s) => s.toLowerCase());
+  const notes = await loadIndex(root);
+  const found: BrainNote[] = [];
+
+  for (const note of notes) {
+    const lower = note.text.toLowerCase();
+    const hit = spellings.find((spelling) => lower.includes(spelling));
+    if (!hit) continue;
+    found.push({
+      path: note.path,
+      title: note.title,
+      excerpt: excerptAround(note.text, [hit]),
+      score: 1,
+    });
+  }
+
+  return found.slice(0, limit);
+}
+
+export interface NoteTask {
+  /** The note it is written in, so he can go and find it. */
+  note: string;
+  text: string;
+}
+
+/**
+ * Unticked boxes in the notes he has touched lately.
+ *
+ * Read from the files rather than from the index, because the index holds
+ * notes as flowing prose — which is right for searching and useless for
+ * anything that lives on its own line.
+ */
+export async function openTasks(limit = 8): Promise<NoteTask[]> {
+  const root = brainRoot();
+  if (!root) return [];
+
+  const notes = await loadIndex(root);
+  const recent = [...notes].sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, 12);
+  const tasks: NoteTask[] = [];
+
+  for (const note of recent) {
+    if (tasks.length >= limit) break;
+    let raw: string;
+    try {
+      raw = await readFile(join(root, note.path), "utf-8");
+    } catch {
+      continue;
+    }
+    for (const line of raw.split(/\r?\n/)) {
+      if (tasks.length >= limit) break;
+      // Only an empty box. A ticked one read back aloud is the fastest way to
+      // make a briefing something he stops listening to.
+      const match = /^\s*[-*]\s+\[ \]\s+(.+?)\s*$/.exec(line);
+      if (match) tasks.push({ note: note.title, text: match[1] });
+    }
+  }
+
+  return tasks;
+}
+
 export async function brainStats(): Promise<{ connected: boolean; noteCount: number }> {
   const root = brainRoot();
   if (!root) return { connected: false, noteCount: 0 };

@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import os from "node:os";
 import { isPiperConfigured } from "@/server/piperVoice";
 import { isLlmConfigured } from "@/server/llm";
+import { fetchEventsForDay, isCalendarConnected } from "@/server/calendar";
 
 export const runtime = "nodejs";
 
 export interface ServiceHealth {
-  id: "voice" | "assistant" | "search" | "music" | "weather";
+  id: "voice" | "assistant" | "search" | "music" | "weather" | "calendar";
   label: string;
   /** `ok` means reachable, not merely configured — the difference matters. */
   state: "ok" | "missing" | "failing";
@@ -32,6 +33,42 @@ const PROBE_TIMEOUT_MS = 4000;
  *  to have the server generate traffic on someone's behalf. */
 const PROBE_CACHE_MS = 30_000;
 let weatherProbe: { at: number; result: ServiceHealth } | null = null;
+let calendarProbe: { at: number; result: ServiceHealth } | null = null;
+
+/**
+ * Whether the calendar link actually answers.
+ *
+ * A link pasted into a file and a link that works are different things, and the
+ * difference shows up as an empty morning rather than as an error. The feed is
+ * fetched and counted; the address itself is never reported back, because
+ * anyone holding it can read the whole calendar.
+ */
+async function probeCalendar(): Promise<ServiceHealth> {
+  if (!isCalendarConnected()) {
+    return {
+      id: "calendar",
+      label: "Calendar",
+      state: "missing",
+      detail: "No link — the briefing says so rather than calling the day clear",
+    };
+  }
+  if (calendarProbe && Date.now() - calendarProbe.at < PROBE_CACHE_MS) return calendarProbe.result;
+
+  const read = await fetchEventsForDay(new Date());
+  const result: ServiceHealth =
+    read === null
+      ? { id: "calendar", label: "Calendar", state: "failing", detail: "Link set but would not load" }
+      : {
+          id: "calendar",
+          label: "Calendar",
+          state: "ok",
+          // Both numbers, because a clear day and a feed that parsed to nothing
+          // are the same "0 today" from out here.
+          detail: `Feed read — ${read.total} entries, ${read.events.length} today`,
+        };
+  calendarProbe = { at: Date.now(), result };
+  return result;
+}
 
 async function probeWeather(): Promise<ServiceHealth> {
   if (weatherProbe && Date.now() - weatherProbe.at < PROBE_CACHE_MS) {
@@ -108,6 +145,7 @@ export async function GET() {
           detail: "No key — falling back to page scraping",
         },
     await probeWeather(),
+    await probeCalendar(),
   ];
 
   const health: ServerHealth = {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { streamChat, isLlmConfigured, type ChatMessage } from "@/server/llm";
 import { toolsFor, actionToolsFor } from "@/server/tools";
 import { searchBrain } from "@/server/brain";
+import { readUserMemory, summariseForPrompt } from "@/server/userMemory";
 import { MODULE_IDS, isModuleLabel } from "@/modules/catalog";
 
 export const runtime = "nodejs";
@@ -21,6 +22,7 @@ function systemPrompt(
   lang: string,
   knowledge: string | null,
   assistantName: string,
+  aboutUser: string | null,
 ): ChatMessage {
   const language =
     lang === "ru"
@@ -54,7 +56,14 @@ function systemPrompt(
       "If you do not know something, say so in one sentence instead of guessing — a confident wrong answer costs the user more than an admission.",
       // Without this the model answers from training data and calls it current.
       // It has tools; the failure mode to guard against is not using them.
-      "You have tools: web search, weather, the current time, and the user's notes.",
+      "You have tools: web search, weather, the current time, the user's notes, a briefing on",
+      "today, and your own memory of the user.",
+      // A briefing is asked for, never volunteered: he decided the system does
+      // not speak first. What it could not see, it says so — and so must you.
+      "Asked what the day looks like, or for a briefing, call morning_briefing rather than",
+      "assembling one yourself, then add news from a web search when their own subjects warrant it.",
+      "It tells you what it could not see: report that plainly instead of filling the gap.",
+      "An unconnected calendar is not an empty day, and must never be said as one.",
       "Use them rather than answering from memory whenever the answer could have changed since you were trained —",
       "prices, news, scores, schedules, anything about this week, and anything about the user's own work.",
       "Never say you have no access to the internet: you do, through web_search. Check first, then answer.",
@@ -74,6 +83,27 @@ function systemPrompt(
       "Asked to open a site or a page you found, call open_site with the full https address.",
       "Reading an address out loud is not opening it.",
       "Say what you did in one short sentence.",
+      // An assistant that meets him again every morning is a stranger with a
+      // good vocabulary. What it works out about him is kept, and kept where
+      // he can read and correct it.
+      "You remember the person you work for. When you learn something lasting about them — how",
+      "they work, what they are building, what they prefer, what they have decided — call",
+      "remember_about_user with one short sentence. Only lasting things: not what they just",
+      "asked, not what you just looked up, not anything true only today. If in doubt, do not,",
+      "because a wrong conclusion is repeated in every answer from then on.",
+      "When they tell you something you believed is wrong, call forget_about_user.",
+      "Never say you have remembered or forgotten something unless you called the tool for it in",
+      "this same turn.",
+      "Do not announce that you are remembering something; just do it and answer them.",
+      aboutUser
+        ? [
+            "\n\nWhat you have concluded about this user so far:\n",
+            aboutUser,
+            "\nUse it the way you would use knowing someone: it shapes how you answer, and you do not",
+            "recite it back at them unless they ask what you know.",
+            "It is your conclusion and it may be wrong — if they contradict it, they are right.\n\n",
+          ].join(" ")
+        : "",
       context,
       language,
       knowledge
@@ -152,7 +182,15 @@ export async function POST(request: Request) {
         .slice(0, MAX_KNOWLEDGE_CHARS)
     : null;
 
-  const messages = [systemPrompt(moduleContext, lang, knowledge, assistantName), ...history];
+  // Read here rather than accepted from the caller, for the same reason the
+  // notes are: this text goes into the system prompt, and anything a caller
+  // can put there is an instruction to the model.
+  const aboutUser = summariseForPrompt(await readUserMemory().catch(() => []));
+
+  const messages = [
+    systemPrompt(moduleContext, lang, knowledge, assistantName, aboutUser),
+    ...history,
+  ];
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({

@@ -45,6 +45,16 @@ Checks before committing: `pnpm --filter web typecheck`, `... lint`,
   years are ordinals, numbers after a preposition are declined, clock times are
   hours and minutes, units and abbreviations are said in full
 - Second brain: a folder of Markdown, indexed in memory, re-read by mtime
+- **Memory of the user** — not his notes but the assistant's own conclusions
+  about him, written into his vault as Markdown he can open and correct. A
+  wrong conclusion, unlike a wrong answer, is repeated in every reply from then
+  on, so it lives where he can strike it out
+- **A morning briefing** — the date, the weather, his calendar, notes written
+  against today, and what is still unticked. Asked for, never volunteered: he
+  decided the system does not speak first
+- **Calendar** through the private iCal address his provider publishes:
+  read-only, no sign-in, one line in `.env.local`. Repeating events are
+  expanded, which is most of what a real calendar holds
 - Web search (Firecrawl), weather (Open-Meteo, no key), a real system check
 - Music through the YouTube Data API, cached a day; falls back to reading the
   results page when `YOUTUBE_API_KEY` is unset
@@ -66,8 +76,10 @@ provider interface takes live sources without touching the UI, but no social or
 financial source is connected. There is no sign-in, no payment, and no
 deployment — it runs on one machine.
 
-Asked for and still open: memory of the user; a morning briefing; the assistant
-speaking first.
+Memory of the user and the morning briefing are built. The assistant speaking
+first was asked for and then **withdrawn** — he does not want it. What he wants
+instead is that when he asks a question, the best answer is proposed rather
+than a list of options.
 
 ## The lesson that matters most
 
@@ -141,6 +153,20 @@ span too fast to see and nothing stopped it. Steps are sliced at a
 hundred-and-twentieth now, and `springStability.test.ts` checks every config at
 every frame rate. Below thirty frames a second every animation runs in slow
 motion — that is the clamp's price, deliberate, and worth knowing.
+
+**What the assistant concludes about him lives in the vault it also searches.**
+Without a marker it writes a guess about him, finds it a day later while
+searching his notes, and repeats it back as something he decided — convincing
+him with his own words, which he never said. The file carries the front matter
+`isAgentMemory` looks for, and `briefing.test.ts` checks both directions: its
+own conclusions never surface, his own notes on the same subject still do.
+
+**"Not connected" and "nothing there" are different answers.** An unconnected
+calendar said as "no meetings today" is a lie he would act on, and from inside
+the code the two are the same empty list. Everything that can be missing is
+carried as null and said as missing. The health check reports the feed's whole
+size beside today's count for the same reason: a clear day and a parser that
+read nothing look identical from outside.
 
 **Music goes through the YouTube Data API, never the general web search**,
 which returns watch links only for the most literal titles.

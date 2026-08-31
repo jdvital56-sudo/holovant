@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# The assistant's conclusions about the user when no vault is connected.
+# Personal, never source.
+.holovant/

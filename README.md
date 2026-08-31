@@ -32,6 +32,8 @@ Put these in `apps/web/.env.local`, which is git-ignored.
 | `FIRECRAWL_API_KEY` | Web search | Search is off |
 | `YOUTUBE_API_KEY` | Finding music the supported way, embeddable results only | Falls back to reading the results page — works, but against YouTube's terms |
 | `HOLOVANT_BRAIN_PATH` | The second brain — a folder of Markdown notes | The module asks you to connect one |
+| `HOLOVANT_USER_MEMORY_PATH` | Where the assistant keeps what it has concluded about you | `Holovant/О пользователе.md` inside the second brain, or `.holovant/` without one |
+| `HOLOVANT_CALENDAR_ICS` | Your calendar in the morning briefing — the **private** iCal address from your calendar's own settings, read-only, no sign-in | The briefing says the calendar is not connected, which is not the same as saying the day is clear |
 | `HOLOVANT_ACCESS_TOKEN` | Requires a bearer token on every `/api/*` call | The API is open — correct on one local machine, **not** on a public address |
 | `NEXT_PUBLIC_HOLOVANT_ASSISTANT_NAME` | What the assistant is called | `Vita` |
 
