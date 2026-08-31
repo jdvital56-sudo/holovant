@@ -5,6 +5,7 @@ import { listProjects, describeAge } from "@/server/projects";
 import { fetchEventsForDay, isCalendarConnected } from "@/server/calendar";
 import { isLlmConfigured } from "@/server/llm";
 import { isPiperConfigured } from "@/server/piperVoice";
+import { fetchRates, type RatesReport } from "@/server/rates";
 import { getUserPlace } from "@/server/userMemory";
 import { fetchWeather } from "@/server/weather";
 import { isSearchConfigured } from "@/server/webSearch";
@@ -77,8 +78,11 @@ export interface CardsSystem {
   uptimeHours: number;
 }
 
+export type CardsRates = RatesReport;
+
 export interface CardsReport {
   weather: CardsWeather;
+  rates: CardsRates;
   calendar: CardsCalendar;
   brain: CardsBrain;
   projects: CardsProjects;
@@ -189,13 +193,22 @@ function readSystem(): CardsSystem {
 }
 
 export async function GET() {
-  const [weather, calendar, brain, projects] = await Promise.all([
+  const [weather, calendar, brain, projects, rates] = await Promise.all([
     readWeather(),
     readCalendar(),
     readBrain(),
     readProjects(),
+    fetchRates().catch(() => ({ state: "unreachable" as const, rows: [] })),
   ]);
 
-  const report: CardsReport = { weather, calendar, brain, projects, ai: readAi(), system: readSystem() };
+  const report: CardsReport = {
+    weather,
+    calendar,
+    brain,
+    projects,
+    rates,
+    ai: readAi(),
+    system: readSystem(),
+  };
   return NextResponse.json(report);
 }

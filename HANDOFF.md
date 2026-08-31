@@ -71,9 +71,12 @@ Checks before committing: `pnpm --filter web typecheck`, `... lint`,
 
 ## What is not built
 
-Module data is mock everywhere except weather, system, the brain and music. The
-provider interface takes live sources without touching the UI, but no social or
-financial source is connected. There is no sign-in, no payment, and no
+Nine of the sixteen cards read something real: weather for the city he last
+said he was in, his calendar, his notes, his repositories, the model actually
+answering, this machine, the rates he watches (lira, hryvnia, euro, gold,
+bitcoin), music, and news on subjects he names out loud. Seven are still mock —
+Instagram, TikTok, YouTube, X, LinkedIn, Telegram and sports — and each of
+those needs an account or a developer registration rather than more code. There is no sign-in, no payment, and no
 deployment — it runs on one machine.
 
 Memory of the user and the morning briefing are built. The assistant speaking

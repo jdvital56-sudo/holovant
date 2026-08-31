@@ -17,7 +17,7 @@ export const MODULE_CATALOG: ReadonlyArray<{ id: ModuleId; label: string }> = [
   { id: "x", label: "X" },
   { id: "linkedin", label: "LinkedIn" },
   { id: "telegram", label: "Telegram" },
-  { id: "stocks", label: "Stocks" },
+  { id: "stocks", label: "Rates" },
   { id: "projects", label: "Projects" },
   { id: "sports", label: "Sports" },
   { id: "calendar", label: "Calendar" },
