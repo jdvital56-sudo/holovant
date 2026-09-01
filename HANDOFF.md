@@ -16,7 +16,7 @@ on a fresh clone, and every feature behind it degrades honestly rather than
 failing: no key means the assistant says so out loud.
 
 Checks before committing: `pnpm --filter web typecheck`, `... lint`,
-`... test`. Lint is slow — allow two or three minutes. There are 263 tests.
+`... test`. Lint is slow — allow two or three minutes. There are 427 tests.
 
 ## What works
 
@@ -67,7 +67,7 @@ Checks before committing: `pnpm --filter web typecheck`, `... lint`,
   costs while searching for a hand and while following one, and which
   processor is doing the looking — switchable, since the graphics card is not
   always the faster of the two
-- 263 tests; lint and types clean; CI runs all three on every push
+- 427 tests; lint and types clean; CI runs all three on every push
 
 ## What is not built
 
