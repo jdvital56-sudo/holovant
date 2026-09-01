@@ -148,3 +148,54 @@ describe("reported broken — «Стоп! Остановись!» and it keeps r
     expect(matchIntent("тише")).toMatchObject({ kind: "volume" });
   });
 });
+
+describe("reported broken — «привет, Тор» and nothing happens", () => {
+  /**
+   * His report: saying "привет, Тор" gives fifteen to thirty seconds of
+   * nothing, and often no answer at all.
+   *
+   * The model was not the delay — a greeting comes back from it in about two
+   * seconds, measured. The name was: attention was only recognised when the
+   * name came first and was followed by nothing, so "привет, Тор" fell through
+   * as an ordinary question. Questions carry guards a command does not — one
+   * asked while the assistant is still speaking or still answering is dropped
+   * in silence — and that is the "ничего не отвечает".
+   */
+  it("answers a greeting with the name in it, wherever the name falls", () => {
+    for (const said of [
+      "привет, Тор",
+      "Тор, привет",
+      "Тор",
+      "эй, Тор",
+      "здравствуй, Тор",
+      "hey Thor",
+      "Тор, ты тут",
+    ]) {
+      expect(matchIntent(said), said).toMatchObject({ kind: "wake" });
+    }
+  });
+
+  it("still lets a command with the name in front be that command", () => {
+    // The other direction, and the one that breaks everything if it goes: the
+    // name is how he addresses it before every order.
+    expect(matchIntent("Тор, покажи лицо")).toMatchObject({ kind: "showFace", show: true });
+    expect(matchIntent("Тор, открой погоду")).toMatchObject({ kind: "open", moduleId: "weather" });
+    expect(matchIntent("Тор, включи музыку")).toMatchObject({ kind: "play" });
+    expect(matchIntent("Тор, тише")).toMatchObject({ kind: "volume" });
+  });
+
+  it("still answers a real request instead of greeting him back", () => {
+    // Neither of these is an attention call, and "да, сэр" to either would be
+    // worse than the delay it replaces. Asking about the weather opens the
+    // card — showing rather than telling is deliberate, and older than this.
+    expect(matchIntent("Тор, какая погода")).toMatchObject({ kind: "open", moduleId: "weather" });
+    expect(matchIntent("Тор, что там по рынку")).toBeNull();
+  });
+
+  it("does not wake on a greeting meant for somebody else", () => {
+    // He talks to people in the room. Without the name it is not for Thor.
+    expect(matchIntent("привет")).toBeNull();
+    expect(matchIntent("привет всем")).toBeNull();
+    expect(matchIntent("здравствуйте")).toBeNull();
+  });
+});

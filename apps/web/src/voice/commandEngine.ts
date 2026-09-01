@@ -298,20 +298,50 @@ function matchFace(text: string): VoiceIntent | null {
   return { kind: "showFace", show: true, label: "show face" };
 }
 
+/** Said to the assistant, they mean nothing but "are you there". */
+const GREETING_WORDS = [
+  "привет",
+  "приветствую",
+  "здравствуй",
+  "здравствуйте",
+  "здорово",
+  "эй",
+  "слушай",
+  "hey",
+  "hi",
+  "hello",
+  "yo",
+];
+
+/** Whole phrases that are only ever a call for attention. */
+const ATTENTION_PHRASES = ["ты тут", "ты здесь", "ты меня слышишь", "you there", "here"];
+
 /**
- * Just the assistant's name, or the name with a word or two after it — a call
- * for attention. "Вита" alone should get "Да, сэр", not be sent to the model.
+ * The name, alone or wrapped in a greeting — a call for attention, answered on
+ * the spot rather than sent to the model.
+ *
+ * The name used to have to come first, and be followed by nothing. He says
+ * "привет, Тор", which is how a person greets anyone, and that fell through as
+ * an ordinary question: a two-second round trip to the model at best, and at
+ * worst silence, because a question asked while the assistant is still talking
+ * is dropped where a command would have been obeyed.
+ *
+ * The name is now looked for anywhere in a short phrase, and what surrounds it
+ * has to be greeting and nothing else — so "Тор, покажи лицо" is still a
+ * command about the face and never a hello.
  */
 function matchWake(text: string): VoiceIntent | null {
   const words = text.split(" ").filter(Boolean);
   if (!words.length || words.length > 3) return null;
+
   const aliases = assistantAliases();
-  if (!aliases.includes(words[0])) return null;
-  // "тор покажи лицо" is a command with a name in front — let it fall through.
-  const rest = words.slice(1).join(" ");
-  if (!rest || ["ты тут", "ты здесь", "you there", "here"].includes(rest)) {
-    return { kind: "wake", label: "wake" };
-  }
+  const nameAt = words.findIndex((word) => aliases.includes(word));
+  if (nameAt === -1) return null;
+
+  const rest = words.filter((_, index) => index !== nameAt);
+  if (!rest.length) return { kind: "wake", label: "wake" };
+  if (ATTENTION_PHRASES.includes(rest.join(" "))) return { kind: "wake", label: "wake" };
+  if (rest.every((word) => GREETING_WORDS.includes(word))) return { kind: "wake", label: "wake" };
   return null;
 }
 

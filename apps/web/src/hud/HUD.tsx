@@ -274,7 +274,6 @@ export function HUD() {
           >
             <span className="h-2 w-2 rounded-full bg-warn shadow-[0_0_10px_rgba(255,170,80,0.8)]" />
             <span className="text-[13px] uppercase tracking-[0.2em] text-frost">СТОП</span>
-            <span className="text-[11px] text-mist/70">Esc</span>
           </button>
           {/* What the microphone actually caught over its own voice.
               Heard nothing is written down as heard nothing, out loud. Left
