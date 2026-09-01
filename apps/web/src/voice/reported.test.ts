@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { matchIntent } from "./commandEngine";
+import { isStopCommand } from "./stopWords";
 
 /**
  * Every line here is something the founder reported as not working, written
@@ -104,5 +105,46 @@ describe("a command about something else, while music plays", () => {
     expect(matchIntent("выключи музыку")).toMatchObject({ kind: "dismiss", target: "player" });
     expect(matchIntent("убери плеер")).toMatchObject({ kind: "dismiss", target: "player" });
     expect(matchIntent("пауза")).toMatchObject({ kind: "pause" });
+  });
+});
+
+describe("reported broken — «Стоп! Остановись!» and it keeps reading", () => {
+  /**
+   * His words: "я когда говорю команду «Стоп! Остановись!», он не
+   * останавливается, он дальше читает, он просто читает".
+   *
+   * Two faults could produce that and they have opposite cures: the word
+   * never reaches the recogniser over the assistant's own voice, or it
+   * reaches it and is dropped. This half rules out the second — whether the
+   * words are recognised at all is answered here in a millisecond instead of
+   * by talking to a machine and guessing.
+   */
+  it("hears both of the words he actually used, punctuation and all", () => {
+    expect(isStopCommand("Стоп! Остановись!")).toBe(true);
+    expect(isStopCommand("стоп")).toBe(true);
+    expect(isStopCommand("остановись")).toBe(true);
+    expect(isStopCommand("СТОП")).toBe(true);
+  });
+
+  it("hears it inside a sentence, not only said alone", () => {
+    // Nobody says a bare word into a machine that is talking over them.
+    expect(isStopCommand("да стоп же")).toBe(true);
+    expect(isStopCommand("так, остановись пожалуйста")).toBe(true);
+    expect(isStopCommand("Тор, хватит")).toBe(true);
+  });
+
+  it("does not stop on a word that merely contains one", () => {
+    // "Остановка" is a bus stop, and a whole-word match is what keeps it from
+    // silencing him mid-sentence. The other direction of the same rule.
+    expect(isStopCommand("остановка автобуса")).toBe(false);
+    expect(isStopCommand("стоматолог")).toBe(false);
+    expect(isStopCommand("расскажи про Стокгольм")).toBe(false);
+  });
+
+  it("leaves «тише» to the volume, where it belongs", () => {
+    // It lowers the sound; it does not mean be quiet. Treating it as a stop
+    // would take away the only way to turn the voice down while it talks.
+    expect(isStopCommand("тише")).toBe(false);
+    expect(matchIntent("тише")).toMatchObject({ kind: "volume" });
   });
 });

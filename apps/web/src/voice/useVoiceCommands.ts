@@ -5,7 +5,13 @@ import { useOrbitStore } from "@/stores/orbitStore";
 import { playBlip } from "@/audio/audioStore";
 import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes";
 import { matchIntent, replyFor } from "./commandEngine";
-import { bareWords, isEchoOfSpeech } from "./echo";
+import { isEchoOfSpeech } from "./echo";
+import { isStopCommand } from "./stopWords";
+
+/** The language the recogniser runs in, without waiting for it to start. */
+function currentLang(): SpeechLang {
+  return typeof navigator !== "undefined" && navigator.language?.startsWith("ru") ? "ru" : "en";
+}
 import {
   speak,
   stopSpeaking,
@@ -17,6 +23,7 @@ import {
   type SpeechLang,
 } from "./speech";
 import { runSearch, clearSearch } from "./searchStore";
+import { noteHeardWhileSpeaking, clearHeardWhileSpeaking } from "./voiceStore";
 import {
   playTrack,
   playSavedTrack,
@@ -29,7 +36,7 @@ import { saveTrack, nextFrom, listPlaylists } from "./playlistStore";
 import { showVita, hideVita } from "@/stores/vitaStore";
 import { nudgeVolume } from "@/audio/volumeStore";
 import { briefingFor, findModule } from "@/modules/briefing";
-import { askAssistant, clearChat, useChatStore } from "./chatStore";
+import { askAssistant, clearChat, stopAnswer, useChatStore } from "./chatStore";
 
 /** Below this a transcript is almost always a stray noise, not a question. */
 const MIN_QUESTION_WORDS = 2;
@@ -50,36 +57,6 @@ const COMMAND_DISPLAY_MS = 2500;
  */
 const AFTER_STOP_DEAF_MS = 1200;
 
-/**
- * Any of these, said alone or in a phrase, stops the voice at once. "тише" is
- * deliberately absent — it lowers the volume, it does not stop speech.
- */
-const STOP_WORDS = [
-  "стоп",
-  "стой",
-  "стойте",
-  // He said "стоп или остановись" and only the first was listed.
-  "остановись",
-  "остановитесь",
-  "прекрати",
-  "прекратите",
-  "отмена",
-  "stop",
-  "cancel",
-  "enough",
-  "хватит",
-  "замолчи",
-  "замолкни",
-  "замолчите",
-  "молчи",
-  "помолчи",
-  "тихо",
-];
-
-function isStopCommand(raw: string): boolean {
-  const words = bareWords(raw);
-  return words.some((w) => STOP_WORDS.includes(w));
-}
 
 /**
  * A question is never accepted this soon after the voice stops. The recogniser
@@ -426,6 +403,7 @@ export function useVoiceCommands() {
    */
   const handleStop = useCallback((lang: SpeechLang) => {
     stopSpeaking();
+    stopAnswer();
     clearChat();
     clearSearch();
     // Paused rather than closed: "стоп" then "продолжи" should carry on from
@@ -484,6 +462,12 @@ export function useVoiceCommands() {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         const text = (result[0]?.transcript ?? "").trim();
+
+        // Everything the microphone catches over the assistant's own voice is
+        // put on screen. He reports saying "стоп" into a long answer and being
+        // read to anyway, and from out here a word that never arrived and a
+        // word that arrived and was dropped are the same thing.
+        if (speakingNow) noteHeardWhileSpeaking(text);
 
         // "стоп" is honoured immediately, even from a partial result, so a long
         // answer stops the moment the word is heard rather than after it.
@@ -575,5 +559,30 @@ export function useVoiceCommands() {
     [],
   );
 
-  return { status, enable, disable };
+  /**
+   * A way to stop that does not go through the microphone.
+   *
+   * He says "стоп" over a long answer and is read to anyway. Whatever the
+   * cause turns out to be, an assistant talking over a person who wants it
+   * quiet must have an escape that cannot fail — and one that does not depend
+   * on the very channel that is currently full of its own voice.
+   */
+  const stop = useCallback(() => handleStop(currentLang()), [handleStop]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      stop();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [stop]);
+
+  // Nothing was caught over the assistant's voice because it is not speaking;
+  // the readout should not keep showing the last answer's leftovers.
+  useEffect(() => {
+    if (status !== "listening") clearHeardWhileSpeaking();
+  }, [status]);
+
+  return { status, enable, disable, stop };
 }

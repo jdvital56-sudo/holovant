@@ -35,6 +35,24 @@ const MAX_TURNS = 12;
 let activeRequest = 0;
 
 /**
+ * The answer in flight, so it can actually be cut off.
+ *
+ * Bumping the request id stops this client processing what arrives, but the
+ * server carries on generating and sending it: the connection stays open, the
+ * tokens are still paid for, and every sentence still crosses the wire. "Стоп"
+ * is supposed to mean stopped.
+ */
+let inFlight: AbortController | null = null;
+
+/** Cuts the answer being generated right now. Safe to call when there is none. */
+export function stopAnswer() {
+  activeRequest++;
+  inFlight?.abort();
+  inFlight = null;
+  useChatStore.setState({ status: "idle", partial: "" });
+}
+
+/**
  * Splits off whole sentences as they complete, so speech can start while the
  * rest of the answer is still being written. Waiting for the final token would
  * add the whole generation time to the silence before the first word.
@@ -47,6 +65,8 @@ function takeCompleteSentences(buffer: string): { spoken: string; rest: string }
 
 export function clearChat() {
   activeRequest++;
+  inFlight?.abort();
+  inFlight = null;
   useChatStore.setState({ status: "idle", history: [], partial: "", errorMessage: null });
 }
 
@@ -66,9 +86,14 @@ export async function askAssistant(question: string, moduleContext: string | nul
     errorMessage: null,
   });
 
+  inFlight?.abort();
+  const controller = new AbortController();
+  inFlight = controller;
+
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
+      signal: controller.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         messages: history,
@@ -105,7 +130,13 @@ export async function askAssistant(question: string, moduleContext: string | nul
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      if (requestId !== activeRequest) return; // A newer question replaced this one.
+      // A newer question replaced this one, or it was stopped. Cancelling the
+      // reader closes the connection rather than leaving the server talking to
+      // nobody.
+      if (requestId !== activeRequest) {
+        void reader.cancel().catch(() => {});
+        return;
+      }
 
       let piece = pendingEnvelope + decoder.decode(value, { stream: true });
       pendingEnvelope = "";
@@ -161,6 +192,9 @@ export async function askAssistant(question: string, moduleContext: string | nul
       history: [...history, { role: "assistant" as const, content: full.trim() }].slice(-MAX_TURNS),
     });
   } catch {
+    // An abort is not a failure: it is the user saying stop, and saying
+    // "не смог получить ответ" out loud would be answering back after being
+    // told to be quiet.
     if (requestId !== activeRequest) return;
     const message =
       lang === "ru" ? "Не смог получить ответ" : "Could not get an answer";
