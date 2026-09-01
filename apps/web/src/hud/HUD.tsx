@@ -8,7 +8,6 @@ import { useAudioStore, toggleAudio } from "@/audio/audioStore";
 import { useInteractionSounds } from "@/audio/useInteractionSounds";
 import { useVoiceCommands } from "@/voice/useVoiceCommands";
 import { useVoiceStore } from "@/voice/voiceStore";
-import { useChatStore } from "@/voice/chatStore";
 import { useVitaStore, hideVita } from "@/stores/vitaStore";
 import { ASSISTANT_NAME } from "@/config/assistant";
 import { useCardStyleStore, cycleCardStyle, CARD_STYLE_LABEL } from "@/stores/cardStyleStore";
@@ -72,13 +71,10 @@ export function HUD() {
   const fps = useQualityStore((s) => s.fps);
   const tier = useQualityStore((s) => s.tier);
   const audioOn = useAudioStore((s) => s.enabled);
-  const { status: voiceStatus, enable: enableVoice, disable: disableVoice, stop: stopVoice } = useVoiceCommands();
+  const { status: voiceStatus, enable: enableVoice, disable: disableVoice } = useVoiceCommands();
   const transcript = useVoiceStore((s) => s.transcript);
   const lastCommand = useVoiceStore((s) => s.lastCommand);
   const voiceError = useVoiceStore((s) => s.errorMessage);
-  const heardWhileSpeaking = useVoiceStore((s) => s.heardWhileSpeaking);
-  const chatStatus = useChatStore((s) => s.status);
-  const answering = chatStatus === "thinking" || chatStatus === "streaming";
   const vitaVisible = useVitaStore((s) => s.visible);
   const cardStyle = useCardStyleStore((s) => s.style);
   useInteractionSounds();
@@ -260,43 +256,6 @@ export function HUD() {
 
       {/* Centred: what was heard is feedback about the user's own speech, so it
           belongs in the middle of their attention, not filed in a corner. */}
-      {/* A stop that does not go through the microphone.
-          He says "стоп" over a long answer and is read to anyway. Until it is
-          known whether the word even reaches the recogniser over the speakers,
-          there has to be a way out that cannot fail — and one visible on a
-          recording, so nobody has to take it on trust. */}
-      {answering && (
-        <div className="col-span-2 row-start-2 self-start justify-self-center mt-2">
-          <button
-            type="button"
-            onClick={stopVoice}
-            className="pointer-events-auto flex items-center gap-2 rounded-full border border-warn/50 bg-[rgba(16,24,38,0.75)] px-5 py-2 backdrop-blur-md transition-colors hover:border-warn"
-          >
-            <span className="h-2 w-2 rounded-full bg-warn shadow-[0_0_10px_rgba(255,170,80,0.8)]" />
-            <span className="text-[13px] uppercase tracking-[0.2em] text-frost">СТОП</span>
-          </button>
-          {/* What the microphone actually caught over its own voice.
-              Heard nothing is written down as heard nothing, out loud. Left
-              blank it would read as "the readout is broken", and those two
-              want opposite things — which is the very mistake this readout
-              exists to stop being made about the voice. */}
-          <div className="mt-2 max-w-sm text-center text-[11px] text-mist">
-            <div className="uppercase tracking-widest text-[10px] text-mist/60">
-              слышно поверх речи &mdash; {heardWhileSpeaking.length}
-            </div>
-            {heardWhileSpeaking.length === 0 ? (
-              <div className="text-warn/80">микрофон не слышит ничего</div>
-            ) : (
-              heardWhileSpeaking.map((line, index) => (
-                <div key={`${index}-${line}`} className="truncate text-frost/80">
-                  {line}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
       {voiceStatus === "listening" && (
         <div className="col-span-2 row-start-3 self-end justify-self-center mb-14 w-full max-w-lg text-center">
           {lastCommand && (

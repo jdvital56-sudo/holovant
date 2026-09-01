@@ -56,6 +56,39 @@ const LEFT_WORDS = ["left", "влево", "налево"];
 const RIGHT_WORDS = ["right", "вправо", "направо"];
 const CLOSE_WORDS = ["close", "back", "dismiss", "закрой", "назад", "закрыть"];
 
+/**
+ * Every way he tells something to stop.
+ *
+ * "отключи" was missing, so "отключи музыку" fell past this and was read as a
+ * short phrase naming a module — which opened the Music card while the song
+ * carried on playing. Two of the six ways he said it worked and four did not,
+ * which is worse than none of them working: it reads as the machine being
+ * moody rather than as a missing word.
+ */
+const ORDER_OFF_WORDS = [
+  "убери",
+  "убрать",
+  "закрой",
+  "закрыть",
+  "скрой",
+  "выключи",
+  "выключь",
+  "отключи",
+  "отключь",
+  "выруби",
+  "останови",
+  "остановись",
+  "заглуши",
+  "пауза",
+  "стоп",
+  "clear",
+  "close",
+  "hide",
+  "pause",
+  "stop",
+  "off",
+];
+
 function normalise(text: string) {
   return text
     .toLowerCase()
@@ -377,22 +410,7 @@ function matchVolume(text: string): VoiceIntent | null {
 
 /** "Убери чат", "закрой плеер", "убери всё" — clearing what is on screen. */
 function matchDismiss(text: string): VoiceIntent | null {
-  const clears = containsAny(text, [
-    "убери",
-    "убрать",
-    "закрой",
-    "закрыть",
-    "скрой",
-    "выключи",
-    "выруби",
-    "останови",
-    "заглуши",
-    "пауза",
-    "clear",
-    "close",
-    "hide",
-    "pause",
-  ]);
+  const clears = containsAny(text, ORDER_OFF_WORDS);
   if (!clears) return null;
   if (/чат|ответ|chat|answer/.test(text)) return { kind: "dismiss", target: "chat", label: "dismiss chat" };
   if (/плеер|player|музык|music|трек|track/.test(text))
@@ -519,7 +537,13 @@ export function matchIntent(rawTranscript: string): VoiceIntent | null {
     if (mentionsModule(text, aliases)) {
       // A bare module name is treated as "open it" — saying "Instagram" with
       // nothing else can only reasonably mean one thing.
-      if (saysOpenVerb || text.split(" ").length <= 3) {
+      //
+      // Unless an order is standing next to it. "музыку стоп" is two words and
+      // names a module, and opening the card while the song kept playing is
+      // exactly what he reported: the word he actually meant was ignored
+      // because the other one was a heading.
+      const ordersItOff = containsAny(text, ORDER_OFF_WORDS);
+      if (saysOpenVerb || (text.split(" ").length <= 3 && !ordersItOff)) {
         return { kind: "open", moduleId: candidate.id, label: `open ${candidate.label}` };
       }
     }

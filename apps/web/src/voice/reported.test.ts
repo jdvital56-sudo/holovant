@@ -277,3 +277,46 @@ describe("a module name is a prefix of half the internet", () => {
     expect(matchIntent("открой https://ru.wikipedia.org")).toBeNull();
   });
 });
+
+describe("reported broken — «Музыку стоп, отключи музыку» and nothing happens", () => {
+  /**
+   * His words: he asked for his favourite song, got it, then said "Музыку
+   * стоп, отключи музыку" and nothing happened.
+   *
+   * Nothing is not quite what happened. Three of the six ways he says it
+   * opened the Music card instead, while the song carried on — a short phrase
+   * naming a module is read as "open it", and the order standing beside the
+   * name was not looked at. "отключи" was missing from the list of orders
+   * entirely. Two of six working is worse than none: it reads as the machine
+   * being moody rather than as a missing word.
+   */
+  it("stops the music every way he has said it", () => {
+    for (const said of [
+      "музыку стоп",
+      "отключи музыку",
+      "выключи музыку",
+      "останови музыку",
+      "стоп музыка",
+      "выруби музыку",
+      "убери музыку",
+      "заглуши музыку",
+    ]) {
+      expect(matchIntent(said), said).toMatchObject({ kind: "dismiss", target: "player" });
+    }
+  });
+
+  it("still opens the card when that is what was asked", () => {
+    // The other direction: the name is still a heading when nothing orders it
+    // off, and an explicit "открой" always wins.
+    expect(matchIntent("открой музыку")).toMatchObject({ kind: "open", moduleId: "music" });
+    expect(matchIntent("покажи музыку")).toMatchObject({ kind: "open", moduleId: "music" });
+    expect(matchIntent("инстаграм")).toMatchObject({ kind: "open", moduleId: "instagram" });
+  });
+
+  it("keeps an order about one thing away from another", () => {
+    // "убери лицо" once stopped the music and left the face exactly where it
+    // was. It must stay named-thing-first.
+    expect(matchIntent("убери лицо")).toMatchObject({ kind: "showFace", show: false });
+    expect(matchIntent("закрой чат")).toMatchObject({ kind: "dismiss", target: "chat" });
+  });
+});

@@ -9,12 +9,6 @@ import { isEchoOfSpeech } from "./echo";
 import { looksLikeFailedCommand } from "./failedCommand";
 import { isStopCommand } from "./stopWords";
 
-/** True while an answer is being generated or read, gaps between sentences included. */
-function answeringNow(): boolean {
-  const status = useChatStore.getState().status;
-  return status === "thinking" || status === "streaming";
-}
-
 /** The language the recogniser runs in, without waiting for it to start. */
 function currentLang(): SpeechLang {
   return typeof navigator !== "undefined" && navigator.language?.startsWith("ru") ? "ru" : "en";
@@ -30,7 +24,6 @@ import {
   type SpeechLang,
 } from "./speech";
 import { runSearch, clearSearch } from "./searchStore";
-import { noteHeardWhileSpeaking, clearHeardWhileSpeaking } from "./voiceStore";
 import {
   playTrack,
   playSavedTrack,
@@ -468,13 +461,6 @@ export function useVoiceCommands() {
         const result = event.results[i];
         const text = (result[0]?.transcript ?? "").trim();
 
-        // Everything the microphone catches while the assistant is answering
-        // goes on screen — for the whole answer, not only while sound is
-        // actually coming out. Between two spoken sentences there is a gap
-        // where nothing is playing, and a word lost in one of those gaps would
-        // have looked like the microphone's fault when it was mine.
-        if (speakingNow || answeringNow()) noteHeardWhileSpeaking(text);
-
         // "стоп" is honoured immediately, even from a partial result, so a long
         // answer stops the moment the word is heard rather than after it.
         if (isStopCommand(text)) {
@@ -583,12 +569,6 @@ export function useVoiceCommands() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [stop]);
-
-  // Nothing was caught over the assistant's voice because it is not speaking;
-  // the readout should not keep showing the last answer's leftovers.
-  useEffect(() => {
-    if (status !== "listening") clearHeardWhileSpeaking();
-  }, [status]);
 
   return { status, enable, disable, stop };
 }
