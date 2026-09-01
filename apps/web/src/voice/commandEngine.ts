@@ -69,6 +69,27 @@ function containsAny(haystack: string, needles: string[]) {
 }
 
 /**
+ * Short aliases have to be whole words; longer ones may be stems.
+ *
+ * "погод" is deliberately a stem so it catches "погоду" and "погода" — Russian
+ * inflects and a whole-word list would need every ending. But a plain
+ * substring search let "ии" inside "википедии" open the AI card: he asked for
+ * the Wikipedia site and got a module. Two letters loose in a sentence match
+ * something eventually.
+ */
+const WHOLE_WORD_ALIAS_MAX = 3;
+
+function mentionsModule(haystack: string, aliases: string[]): boolean {
+  const words = haystack.split(" ").filter(Boolean);
+  return aliases.some((alias) => {
+    if (alias.length <= WHOLE_WORD_ALIAS_MAX) return words.includes(alias);
+    // A stem, but only where a word begins — otherwise it is somebody else's
+    // middle syllable.
+    return words.some((word) => word.startsWith(alias)) || haystack.includes(` ${alias}`) || haystack.startsWith(alias);
+  });
+}
+
+/**
  * Verbs that introduce a web search, longest first so "поищи" is not consumed
  * by a shorter prefix of itself.
  */
@@ -145,7 +166,7 @@ function matchPlay(text: string): VoiceIntent | null {
     const aliases = MODULE_ALIASES[candidate.id];
     // Music is the exception: "включи музыку" is about playing, not opening.
     if (!aliases || candidate.id === "music") continue;
-    if (containsAny(rest, aliases)) {
+    if (mentionsModule(rest, aliases)) {
       return { kind: "open", moduleId: candidate.id, label: `open ${candidate.label}` };
     }
   }
@@ -407,7 +428,33 @@ function matchSearch(text: string): VoiceIntent | null {
  * the caller can leave the carousel alone rather than guess — a wrong guess
  * moves the interface under the user for no reason.
  */
+/**
+ * A word that is plainly a web address: something dotted with a suffix on the
+ * end, or spelled out with its protocol.
+ *
+ * "открой ютуб" is the module. "открой youtube.com" is the site, and matching
+ * it to the card would open the wrong thing while looking like it worked — the
+ * name of a module is a prefix of half the addresses on the internet.
+ */
+const LOOKS_LIKE_ADDRESS = new RegExp(String.raw`^(https?://)?[a-z0-9-]+(\.[a-z]{2,})+(/\S*)?$`);
+
+/**
+ * Checked before the text is cleaned up, because cleaning it removes the very
+ * dot that makes an address an address: "youtube.com" arrives at everything
+ * downstream as "youtube com".
+ */
+function namesAnAddress(raw: string): boolean {
+  return raw
+    .toLowerCase()
+    .split(/\s+/)
+    .some((word) => LOOKS_LIKE_ADDRESS.test(word.replace(/[.,!?;:)]+$/, "")));
+}
+
 export function matchIntent(rawTranscript: string): VoiceIntent | null {
+  // An address is for the model, which has a tool that opens pages. Nothing
+  // here can open one.
+  if (namesAnAddress(rawTranscript)) return null;
+
   let text = normalise(rawTranscript);
   if (!text) return null;
 
@@ -469,7 +516,7 @@ export function matchIntent(rawTranscript: string): VoiceIntent | null {
   for (const candidate of moduleRegistry) {
     const aliases = MODULE_ALIASES[candidate.id];
     if (!aliases) continue;
-    if (containsAny(text, aliases)) {
+    if (mentionsModule(text, aliases)) {
       // A bare module name is treated as "open it" — saying "Instagram" with
       // nothing else can only reasonably mean one thing.
       if (saysOpenVerb || text.split(" ").length <= 3) {

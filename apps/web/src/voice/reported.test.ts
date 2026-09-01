@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { matchIntent } from "./commandEngine";
+import { looksLikeFailedCommand } from "./failedCommand";
 import { isStopCommand } from "./stopWords";
 
 /**
@@ -197,5 +198,82 @@ describe("reported broken — «привет, Тор» and nothing happens", () 
     expect(matchIntent("привет")).toBeNull();
     expect(matchIntent("привет всем")).toBeNull();
     expect(matchIntent("здравствуйте")).toBeNull();
+  });
+});
+
+describe("reported broken — «Открой сайт Википедии» → «не понял команду»", () => {
+  /**
+   * His words: "Я говорю: «Открой сайт Википедии». Он мне говорит: «Не понял
+   * команду». И ничего не происходит."
+   *
+   * A guard refuses phrases that begin like an order to the application and
+   * match nothing, so a missed command never reaches the model — which once
+   * announced that all music was off having done nothing at all. The list of
+   * verbs was one-sided: opening and showing were on it, and those are exactly
+   * what the model has hands for. It was being kept away from its own tool.
+   */
+  it("lets a request to open a page reach the model, which can open pages", () => {
+    for (const said of [
+      "открой сайт википедии",
+      "открой youtube.com",
+      "открой мне гугл",
+      "покажи статью про аланью",
+      "open the wikipedia site",
+    ]) {
+      expect(matchIntent(said), said).toBeNull();
+      expect(looksLikeFailedCommand(said), said).toBe(false);
+    }
+  });
+
+  it("still refuses a missed order about the music, which the matcher owns", () => {
+    // The other direction, and the reason the guard exists: handed on, these
+    // come back as "выключил" over music that is still playing.
+    for (const said of ["включи ту самую", "выключи это", "останови уже", "поставь погромче"]) {
+      expect(looksLikeFailedCommand(said), said).toBe(true);
+    }
+  });
+
+  it("does not touch anything the matcher already understands", () => {
+    // These never reach the guard at all, and must not start to.
+    expect(matchIntent("открой инстаграм")).toMatchObject({ kind: "open", moduleId: "instagram" });
+    expect(matchIntent("громче")).toMatchObject({ kind: "volume" });
+    expect(matchIntent("включи музыку")).toMatchObject({ kind: "play" });
+    expect(matchIntent("закрой")).toMatchObject({ kind: "close" });
+  });
+
+  it("leaves an ordinary question alone", () => {
+    expect(looksLikeFailedCommand("что там по рынку недвижимости")).toBe(false);
+    expect(looksLikeFailedCommand("сколько сейчас доллар")).toBe(false);
+  });
+});
+
+describe("a module name is a prefix of half the internet", () => {
+  /**
+   * Found by the table above rather than reported: "открой сайт Википедии"
+   * opened the AI card. Its alias is "ии", the aliases are matched as
+   * substrings so they catch Russian endings, and "википед-ии" ends in one.
+   * Two letters loose in a sentence match something eventually.
+   */
+  it("does not open a module on a syllable in the middle of another word", () => {
+    expect(matchIntent("открой сайт википедии")).toBeNull();
+    expect(matchIntent("расскажи про импрессионистов")).toBeNull();
+  });
+
+  it("still opens a module named with any ending he uses", () => {
+    // Which is why the aliases are stems in the first place, and must stay so.
+    expect(matchIntent("открой погоду")).toMatchObject({ moduleId: "weather" });
+    expect(matchIntent("покажи погода")).toMatchObject({ moduleId: "weather" });
+    expect(matchIntent("открой новости")).toMatchObject({ moduleId: "news" });
+    expect(matchIntent("покажи акции")).toMatchObject({ moduleId: "stocks" });
+    expect(matchIntent("открой второй мозг")).toMatchObject({ moduleId: "brain" });
+    expect(matchIntent("открой ии")).toMatchObject({ moduleId: "ai" });
+  });
+
+  it("tells an address from a card with the same name", () => {
+    // "открой ютуб" is the card. "открой youtube.com" is the site, and the
+    // difference is a dot the text cleaner used to remove before anyone looked.
+    expect(matchIntent("открой ютуб")).toMatchObject({ moduleId: "youtube" });
+    expect(matchIntent("открой youtube.com")).toBeNull();
+    expect(matchIntent("открой https://ru.wikipedia.org")).toBeNull();
   });
 });

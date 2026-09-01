@@ -6,6 +6,7 @@ import { playBlip } from "@/audio/audioStore";
 import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes";
 import { matchIntent, replyFor } from "./commandEngine";
 import { isEchoOfSpeech } from "./echo";
+import { looksLikeFailedCommand } from "./failedCommand";
 import { isStopCommand } from "./stopWords";
 
 /** True while an answer is being generated or read, gaps between sentences included. */
@@ -152,12 +153,10 @@ export function useVoiceCommands() {
       const question = transcript.trim();
       if (question.split(/\s+/).length < MIN_QUESTION_WORDS) return;
 
-      // Starts like a command but matched nothing — say so plainly rather than
-      // handing it to the model, which answers a failed command with confident
-      // nonsense ("all music is off") and spends the user's trust.
-      const COMMANDISH =
-        /^(включ|выключ|выруб|останов|поставь|открой|закрой|убери|скрой|сделай|покажи|играй|громче|тише|louder|quieter|play|open|close|stop)(\s|$)/;
-      if (COMMANDISH.test(lower)) {
+      // Starts like an order to the application, and matched nothing. Refused
+      // rather than handed on — see failedCommand.ts for which verbs, and why
+      // opening and showing are no longer among them.
+      if (looksLikeFailedCommand(lower)) {
         playBlip("confirm");
         speak(lang === "ru" ? "Не понял команду" : "Did not catch that command", lang);
         setLastCommand("?");
