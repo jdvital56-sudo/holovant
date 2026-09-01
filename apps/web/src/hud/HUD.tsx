@@ -276,19 +276,25 @@ export function HUD() {
             <span className="text-[13px] uppercase tracking-[0.2em] text-frost">СТОП</span>
             <span className="text-[11px] text-mist/70">Esc</span>
           </button>
-          {/* What the microphone actually caught over its own voice. If his
-              "стоп" is not here, the word never arrived — a different fault
-              with a different cure than one that arrived and was ignored. */}
-          {heardWhileSpeaking.length > 0 && (
-            <div className="mt-2 max-w-sm text-center text-[11px] text-mist">
-              <div className="uppercase tracking-widest text-[10px] text-mist/60">слышно поверх речи</div>
-              {heardWhileSpeaking.map((line, index) => (
+          {/* What the microphone actually caught over its own voice.
+              Heard nothing is written down as heard nothing, out loud. Left
+              blank it would read as "the readout is broken", and those two
+              want opposite things — which is the very mistake this readout
+              exists to stop being made about the voice. */}
+          <div className="mt-2 max-w-sm text-center text-[11px] text-mist">
+            <div className="uppercase tracking-widest text-[10px] text-mist/60">
+              слышно поверх речи &mdash; {heardWhileSpeaking.length}
+            </div>
+            {heardWhileSpeaking.length === 0 ? (
+              <div className="text-warn/80">микрофон не слышит ничего</div>
+            ) : (
+              heardWhileSpeaking.map((line, index) => (
                 <div key={`${index}-${line}`} className="truncate text-frost/80">
                   {line}
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
       )}
 
