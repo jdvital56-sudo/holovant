@@ -5,12 +5,31 @@ the source of truth; this is the part the code cannot tell you.
 
 ## Running it
 
+For work on it:
+
 ```
 cd apps/web
 pnpm dev
 ```
 
-Port 3000. Configuration lives in `apps/web/.env.local`, which is git-ignored;
+**For using it — and this is the difference between a product and a demo:**
+
+```
+cd apps/web
+pnpm build
+pnpm start
+```
+
+Port 3000 either way. The development server was the only way it had ever been
+run until 2 September, and he was using it daily: it holds the sources in
+memory, rebuilds on every file touched, and takes 794MB where the built one
+takes 165. On a machine with 16GB and Chrome open it was killed by memory
+pressure, which he experienced as a black screen where the face should be, "не
+смог получить ответ" to every question, and — the clue nobody read — the voice
+changing, because the product's own voice lives on the server and the browser's
+is the fallback. Nothing was broken. Nothing was running.
+
+Build it before showing it to anyone. Configuration lives in `apps/web/.env.local`, which is git-ignored;
 `README.md` lists every variable and what each one turns on. The file is absent
 on a fresh clone, and every feature behind it degrades honestly rather than
 failing: no key means the assistant says so out loud.
