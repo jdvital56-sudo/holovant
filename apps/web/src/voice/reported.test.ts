@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { matchIntent } from "./commandEngine";
 import { looksLikeFailedCommand } from "./failedCommand";
-import { isStopCommand } from "./stopWords";
+import { isStopCommand, withoutStopWords } from "./stopWords";
 
 /**
  * Every line here is something the founder reported as not working, written
@@ -318,5 +318,56 @@ describe("reported broken — «Музыку стоп, отключи музык
     // was. It must stay named-thing-first.
     expect(matchIntent("убери лицо")).toMatchObject({ kind: "showFace", show: false });
     expect(matchIntent("закрой чат")).toMatchObject({ kind: "dismiss", target: "chat" });
+  });
+});
+
+describe("reported broken - two orders in one breath", () => {
+  /**
+   * His words: the command "стоп и закрой лицо" did not work. Half of it did.
+   * Stopping is checked before anything else, so that a long answer is cut the
+   * instant the word is heard - and it returned there, with the rest of the
+   * sentence never read. The voice stopped and the face stayed up.
+   */
+  it("keeps the order that was left after the stop", () => {
+    expect(withoutStopWords("стоп и закрой лицо")).toBe("закрой лицо");
+    expect(withoutStopWords("стоп, закрой лицо")).toBe("закрой лицо");
+    expect(withoutStopWords("остановись и убери лицо")).toBe("убери лицо");
+    expect(withoutStopWords("стоп а потом выключи музыку")).toBe("выключи музыку");
+  });
+
+  it("still recognises what is left as the command it is", () => {
+    expect(matchIntent(withoutStopWords("стоп и закрой лицо"))).toMatchObject({
+      kind: "showFace",
+      show: false,
+    });
+    expect(matchIntent(withoutStopWords("стоп, выключи музыку"))).toMatchObject({
+      kind: "dismiss",
+      target: "player",
+    });
+  });
+
+  it("leaves nothing behind when stopping was the whole of it", () => {
+    // The ordinary case, and it must stay ordinary: bare "стоп" is silence and
+    // nothing else. Anything left over here would be run as a second command.
+    for (const said of ["стоп", "остановись", "хватит", "стоп стоп"]) {
+      expect(withoutStopWords(said), said).toBe("");
+    }
+  });
+
+  it("does not treat a question after the stop as a command", () => {
+    // "Стоп" means be quiet. Whatever follows is only obeyed when it is a
+    // recognised order - handing the remainder to the model would have it
+    // answer back, which is the opposite of what was asked.
+    const rest = withoutStopWords("стоп, что там по рынку недвижимости");
+    expect(rest).not.toBe("");
+    expect(matchIntent(rest)).toBeNull();
+  });
+
+  it("does not send an ordinary order down the stop path at all", () => {
+    // The direction this has broken in before: "убери лицо" once stopped the
+    // music and left the face where it was. "Убери" is deliberately not a word
+    // that stops the voice, so this never reaches the branch above.
+    expect(isStopCommand("убери лицо")).toBe(false);
+    expect(matchIntent("убери лицо")).toMatchObject({ kind: "showFace", show: false });
   });
 });

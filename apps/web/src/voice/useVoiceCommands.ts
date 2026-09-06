@@ -7,7 +7,7 @@ import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes"
 import { matchIntent, replyFor } from "./commandEngine";
 import { isEchoOfSpeech } from "./echo";
 import { looksLikeFailedCommand } from "./failedCommand";
-import { isStopCommand } from "./stopWords";
+import { isStopCommand, withoutStopWords } from "./stopWords";
 
 /** The language the recogniser runs in, without waiting for it to start. */
 function currentLang(): SpeechLang {
@@ -465,6 +465,16 @@ export function useVoiceCommands() {
         // answer stops the moment the word is heard rather than after it.
         if (isStopCommand(text)) {
           handleStop(lang);
+
+          // A phrase can carry two orders. He said "стоп и закрой лицо" and the
+          // voice stopped with the face still up: stopping returned here and
+          // the rest of the sentence was never read.
+          //
+          // Only a recognised command is run, never the remainder as a
+          // question — "стоп" means be quiet, and handing what is left to the
+          // model would have it answer back.
+          const rest = withoutStopWords(text);
+          if (rest && matchIntent(rest)) runIntent(rest, lang);
           return;
         }
 
