@@ -93,7 +93,10 @@ describe("numbers after a preposition, in the sentences he heard", () => {
   });
 
   it("declines after the other prepositions that take the genitive", () => {
-    expect(forVoice("около 44 гривен")).toBe("около сорока четырёх гривен");
+    // "сорока" carries a stress mark now: espeak reads the bare word as
+    // "соро́ка", the bird. The mark is invisible, so it is written as an
+    // escape rather than pasted into the string.
+    expect(forVoice("около 44 гривен")).toBe("около сорока\u0301 четырёх гривен");
     expect(forVoice("с 9 до 18 часов")).toBe("с девяти до восемнадцати часов");
     expect(forVoice("свыше 100 человек")).toBe("свыше ста человек");
   });

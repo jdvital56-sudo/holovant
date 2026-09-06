@@ -209,7 +209,67 @@ export function forVoice(text: string, lang: SpeechLang = "ru"): string {
   // word, never with the name of the mark between them.
   out = out.replace(/(\d+)[.,](\d+)/g, ru ? "$1 и $2" : "$1 point $2");
 
+  // Stress last, once every figure has become the word it will be said as.
+  // The mark it inserts is invisible and would only get in the way of every
+  // pattern above it.
+  if (ru) out = markStress(out);
+
   return out.replace(/\s{2,}/g, " ").replace(/\s+([,.!?;:…])/g, "$1").trim();
+}
+
+/**
+ * espeak's own stress mark: a combining acute written after the stressed
+ * vowel. Written as an escape because the character itself is invisible in an
+ * editor, and RUAccent's `+` before the vowel is a different convention that
+ * this engine reads aloud as the word "плюс".
+ */
+const ACUTE = "\u0301";
+
+const RU_VOWELS = "аеёиоуыэюя";
+
+/**
+ * Words espeak reads with the accent in the wrong place, and which vowel of
+ * each carries it, counting from zero.
+ *
+ * The list is this short because it was measured rather than guessed: every
+ * numeral, ordinal, month, unit and card label the product can say was put
+ * through espeak's phonemiser and the stressed syllable read off in text. Two
+ * words out of about a hundred and thirty come out wrong, and both are forty —
+ * the cardinal, said as "сорОк", and its genitive, said as "сорОка", which is
+ * a bird rather than a number.
+ *
+ * Exact words, never stems. "сороковой" is already correct, and any rule wide
+ * enough to catch "сорок" carries that off with it.
+ *
+ * Figures are deliberately absent. "48" is read by espeak's own number reader,
+ * which stresses it correctly; only what this file spells out in letters goes
+ * wrong. Adding a word here means measuring it first — the sweep that found
+ * these lives in the russian-speech skill.
+ */
+const STRESS_FIXES: Array<[word: string, vowel: number]> = [
+  ["сорок", 0],
+  ["сорока", 2],
+];
+
+/** The word with a combining acute inserted after its nth vowel. */
+function withAcute(word: string, vowel: number): string {
+  let seen = 0;
+  let out = "";
+  for (const letter of word) {
+    out += letter;
+    if (RU_VOWELS.includes(letter.toLowerCase()) && seen++ === vowel) out += ACUTE;
+  }
+  return out;
+}
+
+function markStress(text: string): string {
+  let out = text;
+  for (const [word, vowel] of STRESS_FIXES) {
+    // Matched without regard to case and rebuilt from what was matched, so a
+    // sentence beginning with the word keeps its capital letter.
+    out = out.replace(wordish(word), (found) => withAcute(found, vowel));
+  }
+  return out;
 }
 
 /**
