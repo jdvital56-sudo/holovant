@@ -107,6 +107,8 @@ export function forVoice(text: string, lang: SpeechLang = "ru"): string {
   const HRYVNIA: NounForms = ["гривна", "гривны", "гривен"];
   const POUNDS: NounForms = ["фунт", "фунта", "фунтов"];
   const DEGREES: NounForms = ["градус", "градуса", "градусов"];
+  // He lives in Turkey, and the first row of the rates card is in lira.
+  const LIRA: NounForms = ["лира", "лиры", "лир"];
 
   withUnit(`\\$\\s?${AMOUNT}`, DOLLARS, "dollars");
   withUnit(`€\\s?${AMOUNT}`, EUROS, "euros");
@@ -115,6 +117,7 @@ export function forVoice(text: string, lang: SpeechLang = "ru"): string {
 
   // And the same symbols written after the figure, which is how they appear in
   // Ukrainian and most European copy: "45,30 ₴".
+  withUnit(`${AMOUNT}\\s?₺`, LIRA, "lira");
   withUnit(`${AMOUNT}\\s?₴`, HRYVNIA, "hryvnia");
   withUnit(`${AMOUNT}\\s?€`, EUROS, "euros");
   withUnit(`${AMOUNT}\\s?\\$`, DOLLARS, "dollars");
@@ -254,7 +257,9 @@ const SPOKEN_FORMS: Array<{
   { short: String.raw`шт\.?`, ru: ["штука", "штуки", "штук"], en: "pieces", needsNumber: true },
   { short: String.raw`мин\.`, ru: ["минута", "минуты", "минут"], en: "minutes", needsNumber: true },
   { short: String.raw`сек\.`, ru: ["секунда", "секунды", "секунд"], en: "seconds", needsNumber: true },
-  { short: String.raw`ч\.`, ru: ["час", "часа", "часов"], en: "hours", needsNumber: true },
+  // The full stop is optional: the system card writes "338.8 ч" without one,
+  // and only the dotted form was listed.
+  { short: String.raw`ч\.?`, ru: ["час", "часа", "часов"], en: "hours", needsNumber: true },
   // Hardware shorthand the System module speaks. Left as letters a Russian
   // voice reads them one at a time, which is how "16 GB RAM" came out.
   { short: "GB|ГБ", ru: ["гигабайт", "гигабайта", "гигабайт"], en: "gigabytes", needsNumber: true },

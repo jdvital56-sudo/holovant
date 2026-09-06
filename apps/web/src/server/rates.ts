@@ -73,7 +73,9 @@ export function buildRows(
     { id: "usd-uah", label: "Доллар", value: uah, unit: "₴", decimals: 2 },
     // The table holds euro per dollar; the pair is quoted the other way round.
     { id: "eur-usd", label: "Евро", value: eur !== null ? 1 / eur : null, unit: "$", decimals: 4 },
-    { id: "gold", label: "Золото", value: gold, unit: "$ / унция", decimals: 0 },
+    // "за унцию" rather than "$ / унция": a slash between words is read aloud
+    // as "или", which turned the price of gold into "долларов или унция".
+    { id: "gold", label: "Золото", value: gold, unit: "$ за унцию", decimals: 0 },
     { id: "btc", label: "Биткоин", value: bitcoin, unit: "$", decimals: 0 },
   ];
 }

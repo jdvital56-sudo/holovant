@@ -173,3 +173,47 @@ describe("forVoice — a range is said with words", () => {
     expect(forVoice("Курс НБУ — 44,57 грн")).toBe("Курс НБУ, 44 и 57 гривны");
   });
 });
+
+describe("what the cards built this week say out loud", () => {
+  /**
+   * Each of these is on a card he looks at daily, and each was mine: the units
+   * went onto the screen without anyone asking how they would be read. A
+   * figure that looks right and is spoken wrong is the difference he calls a
+   * product against a toy.
+   */
+
+  it("says the lira, which the rates card is mostly made of", () => {
+    // He lives in Turkey; this is the first row on the card.
+    expect(forVoice("Доллар 48,25 ₺")).toContain("лиры");
+    expect(forVoice("1 ₺")).toContain("1 лира");
+    expect(forVoice("5 ₺")).toContain("5 лир");
+    expect(forVoice("22 ₺")).toContain("22 лиры");
+  });
+
+  it("says hours after a figure whether or not the abbreviation has its dot", () => {
+    // The system card writes "338.8 ч" with no dot, and only "ч." was listed.
+    expect(forVoice("Аптайм 338 ч")).toContain("часов");
+    expect(forVoice("Аптайм 2 ч.")).toContain("часа");
+    expect(forVoice("1 ч")).toContain("1 час");
+  });
+
+  it("does not mistake a bare Russian word for the abbreviation", () => {
+    // The other direction, and the one that would be embarrassing: "ч" is a
+    // letter that starts a great many words.
+    for (const said of ["через час", "чай готов", "начал работу", "человек"]) {
+      expect(forVoice(said), said).toBe(said);
+    }
+  });
+
+  it("says a price per unit as a price per unit", () => {
+    // "4433 $ / унция" was read as "долларов или унция" — the slash becomes
+    // "or" between words, which is right everywhere except here.
+    // 4433 ends in a three, so it takes "доллара" — the table caught me
+    // expecting "долларов" here, which would have been the wrong form.
+    const said = forVoice("Золото 4433 $ за унцию");
+    expect(said).toContain("доллара");
+    expect(said).toContain("за унцию");
+    expect(said).not.toContain("или");
+    expect(forVoice("Золото 4435 $ за унцию")).toContain("долларов");
+  });
+});
