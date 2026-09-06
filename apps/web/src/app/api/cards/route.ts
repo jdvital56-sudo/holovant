@@ -5,6 +5,7 @@ import { listProjects, describeAge } from "@/server/projects";
 import { fetchEventsForDay, isCalendarConnected } from "@/server/calendar";
 import { isLlmConfigured } from "@/server/llm";
 import { isPiperConfigured } from "@/server/piperVoice";
+import { fetchFootball, type FootballReport } from "@/server/football";
 import { fetchRates, type RatesReport } from "@/server/rates";
 import { getUserPlace } from "@/server/userMemory";
 import { fetchWeather } from "@/server/weather";
@@ -80,9 +81,12 @@ export interface CardsSystem {
 
 export type CardsRates = RatesReport;
 
+export type CardsFootball = FootballReport;
+
 export interface CardsReport {
   weather: CardsWeather;
   rates: CardsRates;
+  football: CardsFootball;
   calendar: CardsCalendar;
   brain: CardsBrain;
   projects: CardsProjects;
@@ -193,12 +197,20 @@ function readSystem(): CardsSystem {
 }
 
 export async function GET() {
-  const [weather, calendar, brain, projects, rates] = await Promise.all([
+  const [weather, calendar, brain, projects, rates, football] = await Promise.all([
     readWeather(),
     readCalendar(),
     readBrain(),
     readProjects(),
     fetchRates().catch(() => ({ state: "unreachable" as const, rows: [] })),
+    fetchFootball().catch(() => ({
+      state: "unreachable" as const,
+      season: null,
+      table: [],
+      partial: false,
+      next: [],
+      last: null,
+    })),
   ]);
 
   const report: CardsReport = {
@@ -207,6 +219,7 @@ export async function GET() {
     brain,
     projects,
     rates,
+    football,
     ai: readAi(),
     system: readSystem(),
   };
