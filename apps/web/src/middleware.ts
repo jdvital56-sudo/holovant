@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isForeignOrigin, isRemoteHost } from "@/server/perimeter";
 
 /**
  * The perimeter around /api/*.
@@ -7,14 +8,20 @@ import { NextResponse, type NextRequest } from "next/server";
  * tokens, search credits, CPU on speech synthesis, and — for /api/brain — the
  * contents of the operator's own notes. None of it had a gate.
  *
- * Two rules, in this order:
+ * Four rules, in this order:
  *
  * 1. Rate limit, always on. It protects a laptop from a runaway loop as much
  *    as it protects a deployment from a stranger.
- * 2. A shared token, only when one is configured. Set HOLOVANT_ACCESS_TOKEN
- *    and every API call must carry it; leave it unset and the app runs open,
- *    which is the right default for the single local machine it runs on today
- *    and the wrong one the moment it has a public address.
+ * 2. The request must come from this page. Without this, any other tab in his
+ *    browser — an advertisement on an unrelated site — could post to
+ *    /api/chat and spend his model budget, needing no network access and no
+ *    permission from anyone. That was open while he used it.
+ * 3. With no token set, only this machine may call at all. /api/brain is a
+ *    full-text search of his Obsidian vault and /api/cards names his city and
+ *    his next meeting; on a café network they were answering strangers.
+ * 4. A shared token, only when one is configured. Set HOLOVANT_ACCESS_TOKEN
+ *    and every API call must carry it — which is also how the door is opened
+ *    to other devices deliberately.
  *
  * This is deliberately the smallest thing that closes the hole. Real accounts
  * belong with sign-in and billing, not here.
@@ -70,8 +77,24 @@ export function middleware(req: NextRequest) {
     );
   }
 
+  // Sent by the browser on every cross-origin post, and absent on the app's
+  // own GETs and on curl — so a mismatch is the only thing worth refusing.
+  if (isForeignOrigin(req.headers.get("origin"), req.nextUrl.origin)) {
+    return NextResponse.json({ error: "Cross-origin requests are refused." }, { status: 403 });
+  }
+
   const required = process.env.HOLOVANT_ACCESS_TOKEN?.trim();
-  if (!required) return NextResponse.next();
+  if (!required) {
+    // No token means no way to tell one caller from another, so the only safe
+    // audience is this machine. Setting a token is what opens it wider.
+    if (isRemoteHost(req.headers.get("host"))) {
+      return NextResponse.json(
+        { error: "Set HOLOVANT_ACCESS_TOKEN to allow calls from other devices." },
+        { status: 403 },
+      );
+    }
+    return NextResponse.next();
+  }
 
   const presented =
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ||

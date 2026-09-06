@@ -35,7 +35,7 @@ Put these in `apps/web/.env.local`, which is git-ignored.
 | `HOLOVANT_USER_MEMORY_PATH` | Where the assistant keeps what it has concluded about you | `Holovant/О пользователе.md` inside the second brain, or `.holovant/` without one |
 | `HOLOVANT_PROJECTS_PATH` | The folder your repositories sit in — the Projects card reads each one's branch, when it last moved and what is uncommitted | The card says the folder is not set, which is not the same as having no projects |
 | `HOLOVANT_CALENDAR_ICS` | Your calendar in the morning briefing — the **private** iCal address from your calendar's own settings, read-only, no sign-in | The briefing says the calendar is not connected, which is not the same as saying the day is clear |
-| `HOLOVANT_ACCESS_TOKEN` | Requires a bearer token on every `/api/*` call | The API is open — correct on one local machine, **not** on a public address |
+| `HOLOVANT_ACCESS_TOKEN` | Requires a bearer token on every `/api/*` call, and is what opens the API to other devices at all | Without it the server binds to loopback and refuses any caller that reached it across a network |
 | `NEXT_PUBLIC_HOLOVANT_ASSISTANT_NAME` | What the assistant is called | `Vita` |
 
 ### Checks
