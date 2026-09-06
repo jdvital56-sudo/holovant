@@ -18,6 +18,11 @@
  * nothing.
  */
 
+import { fetchLimitedJson } from "./fetchLimited";
+
+/** A table of currency rates is a few kilobytes. */
+const MAX_REPLY_BYTES = 1_000_000;
+
 const CURRENCY_URL = "https://open.er-api.com/v6/latest/USD";
 const METAL_URL = "https://api.gold-api.com/price";
 const TIMEOUT_MS = 8000;
@@ -84,9 +89,10 @@ export function formatRate(row: RateRow): string {
 
 async function readJson(url: string): Promise<unknown | null> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-    if (!response.ok) return null;
-    return await response.json();
+    return await fetchLimitedJson<unknown>(url, {
+      timeoutMs: TIMEOUT_MS,
+      maxBytes: MAX_REPLY_BYTES,
+    });
   } catch {
     return null;
   }

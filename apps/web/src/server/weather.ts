@@ -20,6 +20,11 @@ export interface WeatherNow {
   low: number;
 }
 
+import { fetchLimitedJson, readCapped } from "./fetchLimited";
+
+/** A forecast for one day is a few kilobytes. */
+const MAX_REPLY_BYTES = 1_000_000;
+
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 const GEO_URL = "https://geocoding-api.open-meteo.com/v1/search";
 const TIMEOUT_MS = 8000;
@@ -42,9 +47,11 @@ export class WeatherError extends Error {
 
 async function resolvePlace(query: string, lang: "ru" | "en"): Promise<GeoResult | null> {
   const url = `${GEO_URL}?name=${encodeURIComponent(query)}&count=1&language=${lang}&format=json`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-  if (!response.ok) return null;
-  const payload = (await response.json()) as { results?: GeoResult[] };
+  const payload = await fetchLimitedJson<{ results?: GeoResult[] }>(url, {
+    timeoutMs: TIMEOUT_MS,
+    maxBytes: MAX_REPLY_BYTES,
+  }).catch(() => null);
+  if (!payload) return null;
   return payload.results?.[0] ?? null;
 }
 
@@ -90,7 +97,7 @@ export async function fetchWeather(options: {
     throw new WeatherError(`Weather provider returned ${response.status}.`, 502);
   }
 
-  const payload = (await response.json()) as {
+  const payload = JSON.parse(await readCapped(response, MAX_REPLY_BYTES)) as {
     current?: Record<string, number>;
     daily?: Record<string, number[]>;
   };

@@ -6,11 +6,16 @@
  * command uses, not a second implementation that drifts from it.
  */
 
+import { readCapped } from "./fetchLimited";
+
 export interface SearchResult {
   title: string;
   url: string;
   description: string;
 }
+
+/** A page of search results is tens of kilobytes. */
+const MAX_REPLY_BYTES = 2_000_000;
 
 const ENDPOINT = "https://api.firecrawl.dev/v2/search";
 const RESULT_LIMIT = 4;
@@ -95,7 +100,7 @@ export async function searchWeb(query: string, limit = RESULT_LIMIT): Promise<Se
     throw new SearchError(`Search provider returned ${response.status}.`, 502);
   }
 
-  const payload = (await response.json()) as {
+  const payload = JSON.parse(await readCapped(response, MAX_REPLY_BYTES)) as {
     data?: { web?: FirecrawlItem[] } | FirecrawlItem[];
   };
 

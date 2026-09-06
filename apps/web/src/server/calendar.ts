@@ -15,6 +15,11 @@
  * work perfectly.
  */
 
+import { fetchLimited } from "./fetchLimited";
+
+/** A year of a busy calendar sits well under this; a hostile feed does not. */
+const MAX_FEED_BYTES = 5_000_000;
+
 export interface CalendarEvent {
   /** When it starts. Midnight local time for an all-day entry. */
   start: Date;
@@ -272,9 +277,10 @@ export async function fetchEventsForDay(
   if (!url) return null;
 
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!response.ok) return null;
-    const ics = await response.text();
+    // Capped by size as well as by time. Eight seconds stops a slow feed and
+    // does nothing about a fast enormous one, and on an open network the reply
+    // is not necessarily the one the calendar sent.
+    const ics = await fetchLimited(url, { timeoutMs: 8000, maxBytes: MAX_FEED_BYTES });
     // The feed's own size travels with the answer. Telling an empty day from a
     // feed that parsed to nothing took a script the first time it mattered,
     // and anything that has to be found out by hand once will have to be found
