@@ -41,7 +41,9 @@ const MODULE_ALIASES: Record<ModuleId, string[]> = {
   telegram: ["telegram", "телеграм", "телег"],
   stocks: ["stocks", "stock", "portfolio", "акци", "бирж", "портфел"],
   projects: ["projects", "project", "проект"],
-  sports: ["sports", "sport", "спорт"],
+  // "футбол" is a stem, so it catches "футбола" and "футболе" too. He asked
+  // for this card as football, and "спорт" is not the word he uses for it.
+  sports: ["sports", "sport", "спорт", "футбол"],
   calendar: ["calendar", "schedule", "календар", "расписани"],
   weather: ["weather", "погод"],
   ai: ["ai", "assistant", "ии", "ассистент"],
