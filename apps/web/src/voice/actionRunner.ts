@@ -9,6 +9,7 @@ import { nudgeVolume } from "@/audio/volumeStore";
 import { playTrack, playSavedTrack, commandPlayer, usePlayStore } from "./playMusic";
 import { saveTrack, nextFrom } from "./playlistStore";
 import { isSafeUrl, type QueuedAction } from "@/server/actionTypes";
+import { approveHost, hostOf, isHostApproved } from "./trustedHosts";
 
 /**
  * Carrying out what the assistant decided to do.
@@ -23,7 +24,12 @@ import { isSafeUrl, type QueuedAction } from "@/server/actionTypes";
 
 export interface PendingLink {
   url: string;
+  /** What the model called it. Written by whoever steered it, so never alone. */
   title: string;
+  /** The part that cannot be dressed up, and the part he is shown. */
+  host: string;
+  /** Why it is waiting: a host he has not approved, or the browser's own rule. */
+  reason: "unknown-host" | "popup-blocked";
 }
 
 interface ActionState {
@@ -63,9 +69,16 @@ export function clearPendingLink() {
 }
 
 /** Opens the link the browser refused to open on its own. Called from a click. */
+/**
+ * Opens the link he just looked at and agreed to.
+ *
+ * Agreeing also remembers the host, so the same site never asks twice — the
+ * question is "have you seen where this goes", and once he has, he has.
+ */
 export function openPendingLink() {
   const pending = useActionStore.getState().pendingLink;
   if (!pending) return;
+  approveHost(pending.host);
   window.open(pending.url, "_blank", "noopener,noreferrer");
   useActionStore.setState({ pendingLink: null });
   note(pending.title || pending.url);
@@ -138,16 +151,35 @@ export function runAction(queued: QueuedAction): string | null {
     case "open_site": {
       const url = args.url ?? "";
       if (!isSafeUrl(url)) return null;
+      const host = hostOf(url);
+      if (!host) return null;
       const title = args.title || url;
-      // A page may only open a tab in response to a click. Where the user has
-      // allowed popups for this site it goes straight through; where they have
-      // not, it becomes one tap rather than a silent failure.
+
+      // The address may have been chosen by a sentence somebody else wrote —
+      // in a note, in a calendar invitation, in a search result the model
+      // read. So a host he has not approved is never opened without him
+      // seeing the host itself; the title cannot be trusted, because whoever
+      // steered the model wrote that too.
+      //
+      // Approved once, it opens straight through from then on. He asked not
+      // to be asked every time, and this is how both hold at once.
+      if (!isHostApproved(host)) {
+        useActionStore.setState({ pendingLink: { url, title, host, reason: "unknown-host" } });
+        return title;
+      }
+
+      // A page may only open a tab in response to a click. Where popups are
+      // allowed it goes straight through; where they are not, it becomes one
+      // tap rather than a silent failure.
       const opened = window.open(url, "_blank", "noopener,noreferrer");
       if (opened) {
         note(`Открыл ${title}`);
         return title;
       }
-      useActionStore.setState({ pendingLink: { url, title }, popupsBlocked: true });
+      useActionStore.setState({
+        pendingLink: { url, title, host, reason: "popup-blocked" },
+        popupsBlocked: true,
+      });
       return title;
     }
 

@@ -36,9 +36,14 @@ export function ActionTrail() {
             className="pointer-events-auto w-full rounded-2xl border border-signal/30 bg-[rgba(10,16,26,0.92)] p-3 backdrop-blur-xl"
           >
             <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-mist">
-              браузер просит подтверждения
+              {pendingLink.reason === "unknown-host" ? "открыть незнакомый сайт?" : "браузер просит подтверждения"}
             </div>
-            <div className="mb-2 truncate text-[13px] text-frost">{pendingLink.title}</div>
+            {/* The host first and largest. The title was chosen by the model,
+                and whoever steered the model into opening this wrote it — so
+                it is shown underneath, as a caption, never as the answer to
+                "where does this go". */}
+            <div className="mb-1 truncate font-mono text-[15px] text-frost">{pendingLink.host}</div>
+            <div className="mb-2 truncate text-[12px] text-mist">{pendingLink.title}</div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -56,8 +61,9 @@ export function ActionTrail() {
               </button>
             </div>
             <div className="mt-2 text-[10px] leading-snug text-mist/60">
-              Чтобы ссылки открывались сами — разрешите всплывающие окна для этого сайта в
-              настройках браузера.
+              {pendingLink.reason === "unknown-host"
+                ? "Этот сайт открывается впервые. Разрешите — и дальше он будет открываться сам."
+                : "Чтобы ссылки открывались сами — разрешите всплывающие окна для этого сайта в настройках браузера."}
             </div>
           </motion.div>
         )}
