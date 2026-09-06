@@ -557,7 +557,12 @@ export function planAction(
       if (!isSafeUrl(url)) return null;
       return {
         action: { action: "open_site", args: { url, title: text("title") } },
-        note: `Opening ${text("title") || url}.`,
+        // Not "opened". A site the user has not approved before waits on
+        // screen showing its host until they agree, and only the browser knows
+        // which those are. Saying it opened when it is waiting is the one
+        // thing this brief forbids everywhere else, and it would be no better
+        // for being true most of the time.
+        note: `Sent ${text("title") || url} to the screen. If it is a site they have not opened before, they will be asked to confirm it first — say so rather than saying it opened.`,
       };
     }
     case "set_volume": {

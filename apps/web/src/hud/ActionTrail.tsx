@@ -41,8 +41,17 @@ export function ActionTrail() {
             {/* The host first and largest. The title was chosen by the model,
                 and whoever steered the model into opening this wrote it — so
                 it is shown underneath, as a caption, never as the answer to
-                "where does this go". */}
-            <div className="mb-1 truncate font-mono text-[15px] text-frost">{pendingLink.host}</div>
+                "where does this go".
+
+                Never truncated. It was, and that undid the whole guarantee:
+                "account.apple.com.id-verify-continue.evil-host.example" ended
+                at an ellipsis and read as apple.com, while the button opened
+                the real thing. The end of a host is the part that says who
+                owns it, so the end is the part that must not be the part cut
+                off. It wraps instead, however long it has to be. */}
+            <div className="mb-1 break-all font-mono text-[15px] leading-snug text-frost">
+              {pendingLink.host}
+            </div>
             <div className="mb-2 truncate text-[12px] text-mist">{pendingLink.title}</div>
             <div className="flex items-center gap-2">
               <button

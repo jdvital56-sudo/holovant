@@ -7,6 +7,7 @@
  */
 
 import { readCapped } from "./fetchLimited";
+import { stripControlCharacters } from "./untrustedText";
 
 export interface SearchResult {
   title: string;
@@ -51,7 +52,10 @@ export class SearchError extends Error {
  * spoken aloud they are worse, so the markup is stripped down to prose.
  */
 export function cleanDescription(raw: string): string {
-  let text = raw.replace(/!\[[^\]]*\]\([^)]*\)/g, " "); // images
+  // Anyone can publish a page, so anyone can choose these words. The invisible
+  // characters go first: an action envelope is made of two of them, and the
+  // client that unpacks one does not ask who wrote it.
+  let text = stripControlCharacters(raw).replace(/!\[[^\]]*\]\([^)]*\)/g, " "); // images
 
   // Repeated because citation markup nests — "[[1]](url)" needs two passes
   // before the label is bare, and one pass leaves "[[1]](" behind.

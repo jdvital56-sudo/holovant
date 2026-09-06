@@ -3,6 +3,7 @@ import { streamChat, isLlmConfigured, type ChatMessage } from "@/server/llm";
 import { toolsFor, actionToolsFor } from "@/server/tools";
 import { searchBrain } from "@/server/brain";
 import { readUserMemory, summariseForPrompt } from "@/server/userMemory";
+import { stripControlCharacters } from "@/server/untrustedText";
 import { MODULE_IDS, isModuleLabel } from "@/modules/catalog";
 
 export const runtime = "nodejs";
@@ -193,18 +194,24 @@ export async function POST(request: Request) {
   // knowledge base, and gathering them here removes a round trip as well.
   const question = history[history.length - 1]?.content ?? "";
   const notes = await searchBrain(question).catch(() => []);
+  // Stripped of invisible characters before it goes anywhere near the prompt.
+  // A note can arrive from anywhere — synced from another machine, pasted from
+  // a page — and an action envelope is made of two characters nobody can see.
   const knowledge = notes.length
-    ? notes
-        .slice(0, 3)
-        .map((note) => `# ${note.title}\n${note.excerpt}`)
-        .join("\n\n")
-        .slice(0, MAX_KNOWLEDGE_CHARS)
+    ? stripControlCharacters(
+        notes
+          .slice(0, 3)
+          .map((note) => `# ${note.title}\n${note.excerpt}`)
+          .join("\n\n"),
+      ).slice(0, MAX_KNOWLEDGE_CHARS)
     : null;
 
   // Read here rather than accepted from the caller, for the same reason the
   // notes are: this text goes into the system prompt, and anything a caller
   // can put there is an instruction to the model.
-  const aboutUser = summariseForPrompt(await readUserMemory().catch(() => []));
+  const remembered = summariseForPrompt(await readUserMemory().catch(() => []));
+  // He edits this file by hand in Obsidian, and it syncs from other machines.
+  const aboutUser = remembered ? stripControlCharacters(remembered) : null;
 
   const messages = [
     systemPrompt(moduleContext, lang, knowledge, assistantName, aboutUser),
