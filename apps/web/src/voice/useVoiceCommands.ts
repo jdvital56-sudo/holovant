@@ -8,6 +8,7 @@ import { matchIntent, replyFor } from "./commandEngine";
 import { isEchoOfSpeech } from "./echo";
 import { looksLikeFailedCommand } from "./failedCommand";
 import { isStopCommand, withoutStopWords } from "./stopWords";
+import { recoveryFor } from "./recognitionRecovery";
 
 /** The language the recogniser runs in, without waiting for it to start. */
 function currentLang(): SpeechLang {
@@ -74,22 +75,6 @@ function isOwnEcho(raw: string): boolean {
   return isEchoOfSpeech(raw, recentSpokenText());
 }
 
-function describeError(code: string): string {
-  switch (code) {
-    case "not-allowed":
-    case "service-not-allowed":
-      return "Microphone access denied — allow the microphone permission and try again.";
-    case "no-speech":
-      return "No speech detected.";
-    case "audio-capture":
-      return "No microphone found on this device.";
-    case "network":
-      return "Speech recognition needs a network connection.";
-    default:
-      return `Speech recognition failed (${code}).`;
-  }
-}
-
 /**
  * Voice control for the commands the app can carry out by itself — opening a
  * module, turning the carousel, closing a panel. Deliberately independent of
@@ -107,6 +92,10 @@ export function useVoiceCommands() {
   const unduckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The collection last played from, so "дальше" stays inside it. */
   const lastPlaylist = useRef<string | null>(null);
+  /** Errors in a row with no result between them; reset the moment one lands. */
+  const failures = useRef(0);
+  /** Set while waiting out a backoff, so onend does not restart underneath it. */
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const runIntent = useCallback((transcript: string, lang: SpeechLang) => {
     const lower = transcript.trim().toLowerCase();
@@ -454,6 +443,9 @@ export function useVoiceCommands() {
         if (!isSystemSpeaking()) duckMusic(false);
       }, 2500);
 
+      // Something was heard, so whatever went wrong before is over.
+      failures.current = 0;
+
       const speakingNow = isSystemSpeaking();
 
       let interim = "";
@@ -508,11 +500,34 @@ export function useVoiceCommands() {
     };
 
     recognition.onerror = (event) => {
-      // "no-speech" fires constantly during silence and is not a failure.
-      if (event.error === "no-speech") return;
-      wantsRunning.current = false;
-      recognitionRef.current = null;
-      setVoiceError(describeError(event.error));
+      // Every code used to end here for good — including "aborted", which
+      // Chrome raises as a matter of course and which cutting the voice
+      // mid-sentence is enough to cause. The microphone went deaf a minute
+      // after being switched on and stayed deaf, and the only sign of it was
+      // a line of English in the corner.
+      const decision = recoveryFor(event.error, failures.current, currentLang());
+      if (decision.action === "give-up") {
+        wantsRunning.current = false;
+        recognitionRef.current = null;
+        setVoiceError(decision.message);
+        setVoiceStatus("error");
+        return;
+      }
+
+      failures.current += 1;
+      // onend follows an error, and restarts on its own when the wait is zero.
+      if (decision.delayMs > 0) {
+        if (retryTimer.current) clearTimeout(retryTimer.current);
+        retryTimer.current = setTimeout(() => {
+          retryTimer.current = null;
+          if (!wantsRunning.current) return;
+          try {
+            recognition.start();
+          } catch {
+            // Already running, which is the outcome this wanted anyway.
+          }
+        }, decision.delayMs);
+      }
     };
 
     // Chrome ends continuous sessions on its own every so often; restart unless
@@ -523,6 +538,8 @@ export function useVoiceCommands() {
         setVoiceStatus("off");
         return;
       }
+      // A backoff is already counting down; restarting now would defeat it.
+      if (retryTimer.current) return;
       try {
         recognition.start();
       } catch {

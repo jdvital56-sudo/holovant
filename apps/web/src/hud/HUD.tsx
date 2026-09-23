@@ -210,7 +210,14 @@ export function HUD() {
             (click to {voiceStatus === "off" || voiceStatus === "error" ? "enable" : "disable"})
           </span>
         </button>
-        {voiceError && <div className="text-[10px] text-warn mt-1 max-w-[220px]">{voiceError}</div>}
+        {/* Legible on purpose. The microphone now recovers from anything it
+            can recover from, so a message here means it is genuinely off and
+            needs him — and at ten pixels it went unread for a fortnight. */}
+        {voiceError && (
+          <div className="mt-1 max-w-[260px] text-[12px] font-medium leading-snug text-warn">
+            {voiceError}
+          </div>
+        )}
         <button
           type="button"
           onClick={cycleCardStyle}
