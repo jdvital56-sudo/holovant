@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { askAssistant, useChatStore } from "@/voice/chatStore";
+import { askAssistant, clearChat, useChatStore } from "@/voice/chatStore";
 import { forSpeech } from "@/voice/speech";
 import { useVitaStore } from "@/stores/vitaStore";
 import { useOrbitStore } from "@/stores/orbitStore";
@@ -52,6 +52,21 @@ export function AssistantAnswer() {
   const streaming = status === "thinking" || status === "streaming";
   const live = forSpeech(partial);
 
+  /**
+   * Closing wipes the conversation.
+   *
+   * He asked for it plainly: "когда я его закрываю, он просто обнулялся".
+   * The panel is for the exchange happening now, and carrying yesterday's
+   * thread into today only makes the assistant answer the wrong question.
+   * What should outlive the panel goes to the second brain, not here.
+   */
+  function close() {
+    clearChat();
+    setSeenAnswers(0);
+    setDraft("");
+    setOpen(false);
+  }
+
   function send() {
     const question = draft.trim();
     if (!question || streaming) return;
@@ -65,12 +80,12 @@ export function AssistantAnswer() {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, x: 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
             transition={{ type: "spring", stiffness: 240, damping: 26 }}
             translate="no"
-            className="pointer-events-auto fixed bottom-20 left-1/2 z-30 flex w-[min(680px,calc(100vw-3rem))] -translate-x-1/2 flex-col rounded-2xl border border-signal/25 bg-[rgba(10,16,26,0.9)] backdrop-blur-xl"
+            className="pointer-events-auto fixed bottom-20 right-6 top-24 z-30 flex w-[min(400px,calc(100vw-3rem))] flex-col rounded-2xl border border-signal/25 bg-[rgba(10,16,26,0.9)] backdrop-blur-xl"
           >
             <div className="flex items-center justify-between border-b border-signal/15 px-5 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-mist">
               <span className="flex items-center gap-2">
@@ -85,17 +100,14 @@ export function AssistantAnswer() {
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  setSeenAnswers(answers);
-                  setOpen(false);
-                }}
+                onClick={close}
                 className="uppercase tracking-[0.2em] text-mist transition-colors hover:text-frost"
               >
                 свернуть
               </button>
             </div>
 
-            <div ref={scroller} className="flex max-h-[45vh] flex-col gap-3 overflow-y-auto px-5 py-4">
+            <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
               {history.length === 0 && !live && (
                 <p className="text-[14px] text-mist">Спросите вслух или напишите здесь.</p>
               )}
@@ -145,10 +157,8 @@ export function AssistantAnswer() {
       <button
         type="button"
         onClick={() => {
-          // Closing marks everything said so far as seen, so the dot means
-          // "since you last looked" rather than "ever".
-          if (open) setSeenAnswers(answers);
-          setOpen((was) => !was);
+          if (open) close();
+          else setOpen(true);
         }}
         aria-label={open ? "Свернуть чат" : "Открыть чат"}
         className="pointer-events-auto fixed bottom-6 right-6 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-signal/30 bg-[rgba(10,16,26,0.8)] backdrop-blur-md transition-colors hover:border-signal"
