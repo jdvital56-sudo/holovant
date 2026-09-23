@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isForeignOrigin, isRemoteHost } from "@/server/perimeter";
+import { isForeignOrigin, isRemoteHost, selfOrigin } from "@/server/perimeter";
 
 /**
  * The two locks put on /api/* after a security review, both of which were open
@@ -47,6 +47,57 @@ describe("a page that is not this one", () => {
     const self = "http://127.0.0.1:3000";
     expect(isForeignOrigin("http://127.0.0.1:3000", self)).toBe(false);
     expect(isForeignOrigin("http://localhost:3000", self)).toBe(true);
+  });
+});
+
+/**
+ * The address the browser actually asked for.
+ *
+ * This is the half that was wrong, and it cost him a fortnight. The middleware
+ * compared Origin against Next's own `nextUrl.origin`, which reports
+ * "http://localhost:3000" no matter what the request said. So when he opened
+ * the app as 127.0.0.1 — because that is the link I gave him — every POST it
+ * made was refused as foreign: answers, music, favourites, everything it
+ * remembers. GETs carry no Origin and went on working, so the cards still
+ * showed data. From the outside it reads as an assistant that has forgotten
+ * everything and cannot answer anything.
+ */
+describe("the address the browser asked for", () => {
+  it("is the host it sent, not the one the framework assumes", () => {
+    expect(selfOrigin("127.0.0.1:3000", "http:", null)).toBe("http://127.0.0.1:3000");
+    expect(selfOrigin("localhost:3000", "http:", null)).toBe("http://localhost:3000");
+  });
+
+  it("lets both of his ways of opening the page through", () => {
+    // The whole bug, as one pair of rows.
+    for (const host of ["127.0.0.1:3000", "localhost:3000"]) {
+      const self = selfOrigin(host, "http:", null);
+      expect(isForeignOrigin(`http://${host}`, self), host).toBe(false);
+    }
+  });
+
+  it("still refuses somebody else's site, whichever way he opened it", () => {
+    // The direction that must not be lost while fixing the other one.
+    for (const host of ["127.0.0.1:3000", "localhost:3000"]) {
+      const self = selfOrigin(host, "http:", null);
+      expect(isForeignOrigin("https://evil.example", self), host).toBe(true);
+      expect(isForeignOrigin("http://ads.example.com", self), host).toBe(true);
+      // A different local port is a different program on his own machine.
+      expect(isForeignOrigin("http://localhost:5173", self), host).toBe(true);
+    }
+  });
+
+  it("follows a proxy that terminated the TLS", () => {
+    // Behind a proxy the connection here is plain http while the browser saw
+    // https, and its Origin says so.
+    expect(selfOrigin("app.example.com", "http:", "https")).toBe("https://app.example.com");
+    expect(selfOrigin("app.example.com", "http:", "https, http")).toBe("https://app.example.com");
+  });
+
+  it("matches nothing at all when there is no host to compare with", () => {
+    // Refusing is the safe direction: a request with an Origin and no Host is
+    // not something to guess about.
+    expect(isForeignOrigin("http://localhost:3000", selfOrigin(null, "http:", null))).toBe(true);
   });
 });
 

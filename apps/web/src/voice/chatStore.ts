@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { speak, speakQueued } from "./speech";
 import { searchBrain } from "@/modules/brain/brainStore";
 import { ASSISTANT_NAME } from "@/config/assistant";
+import { failureMessage } from "./requestFailure";
 import { TOOL_MARKER } from "@/server/toolMarker";
 import { extractActions } from "@/server/actionTypes";
 import { runAction } from "./actionRunner";
@@ -103,18 +104,15 @@ export async function askAssistant(question: string, moduleContext: string | nul
       }),
     });
 
-    if (response.status === 501) {
-      const message =
-        lang === "ru"
-          ? "Языковая модель не подключена — нужен ключ."
-          : "No language model is connected — a key is needed.";
-      useChatStore.setState({ status: "error", errorMessage: message });
+    // Every refusal used to fall into the catch below and come out as "Не смог
+    // получить ответ" — which is how a perimeter refusing every POST the page
+    // made went unnoticed for a fortnight. The status is the one thing that
+    // says which fault it is, so it is said.
+    if (!response.ok || !response.body) {
+      const message = failureMessage(response.status, lang === "ru" ? "ru" : "en");
+      useChatStore.setState({ status: "error", errorMessage: message, partial: "" });
       speak(message, lang);
       return;
-    }
-
-    if (!response.ok || !response.body) {
-      throw new Error(`Request failed (${response.status}).`);
     }
 
     const reader = response.body.getReader();
@@ -196,8 +194,8 @@ export async function askAssistant(question: string, moduleContext: string | nul
     // "не смог получить ответ" out loud would be answering back after being
     // told to be quiet.
     if (requestId !== activeRequest) return;
-    const message =
-      lang === "ru" ? "Не смог получить ответ" : "Could not get an answer";
+    // Nothing came back at all: the server is down, or the network is gone.
+    const message = failureMessage(null, lang === "ru" ? "ru" : "en");
     useChatStore.setState({ status: "error", errorMessage: message, partial: "" });
     speak(message, lang);
   }

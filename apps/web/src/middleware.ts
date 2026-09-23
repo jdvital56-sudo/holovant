@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isForeignOrigin, isRemoteHost } from "@/server/perimeter";
+import { isForeignOrigin, isRemoteHost, selfOrigin } from "@/server/perimeter";
 
 /**
  * The perimeter around /api/*.
@@ -79,7 +79,15 @@ export function middleware(req: NextRequest) {
 
   // Sent by the browser on every cross-origin post, and absent on the app's
   // own GETs and on curl — so a mismatch is the only thing worth refusing.
-  if (isForeignOrigin(req.headers.get("origin"), req.nextUrl.origin)) {
+  // Compared against the address the browser asked for, not against
+  // nextUrl.origin — which says "localhost" whichever way the page was opened,
+  // and so refused every post the app made to itself at 127.0.0.1.
+  const self = selfOrigin(
+    req.headers.get("host"),
+    req.nextUrl.protocol,
+    req.headers.get("x-forwarded-proto"),
+  );
+  if (isForeignOrigin(req.headers.get("origin"), self)) {
     return NextResponse.json({ error: "Cross-origin requests are refused." }, { status: 403 });
   }
 

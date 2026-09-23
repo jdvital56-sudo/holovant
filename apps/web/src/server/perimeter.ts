@@ -23,6 +23,36 @@ export function isForeignOrigin(origin: string | null, self: string): boolean {
   return origin !== self;
 }
 
+/**
+ * The address the browser actually asked for, which is the only thing its
+ * `Origin` can be compared against.
+ *
+ * The check above was right and what it was handed was wrong. The middleware
+ * passed Next's own `nextUrl.origin`, which reports `http://localhost:3000`
+ * whatever the request said — so opening the app as `127.0.0.1` made every
+ * POST the page sent look like it came from somebody else. Answers, music,
+ * favourites, everything the assistant remembers: all refused. GETs carry no
+ * `Origin` and went on working, so the cards kept showing real data, and from
+ * the outside it reads as an assistant that has forgotten everything and
+ * cannot answer anything.
+ *
+ * @param host the `Host` header — what the browser typed, including the port
+ * @param protocol the scheme this connection arrived on, as `"http:"`
+ * @param forwardedProto `X-Forwarded-Proto`, when a proxy ended the TLS
+ * @returns an origin to compare against, or `""` when there is nothing to
+ *   compare with — which refuses rather than guesses
+ */
+export function selfOrigin(
+  host: string | null,
+  protocol: string,
+  forwardedProto: string | null,
+): string {
+  if (!host) return "";
+  // A proxy chain sends a list; the first entry is what the browser saw.
+  const scheme = (forwardedProto?.split(",")[0]?.trim() || protocol).replace(/:$/, "");
+  return `${scheme}://${host}`;
+}
+
 /** Loopback by any of its names, including the bracketed IPv6 form. */
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
