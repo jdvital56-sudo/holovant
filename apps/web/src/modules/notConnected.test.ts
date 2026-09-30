@@ -19,7 +19,7 @@ describe("a social card with no account behind it", () => {
     for (const card of SOCIAL) {
       const data = await card.dataProvider.getSnapshot();
       const shown = card.toMetrics(data).map((m) => `${m.label} ${m.value}`).join(" ");
-      expect(shown, card.id).toContain("не подключён");
+      expect(shown, card.id).toContain("не подключено");
       expect(card.toAdvice(data, "ru").spoken, card.id).toContain("не подключён");
     }
   });
@@ -58,6 +58,15 @@ describe("a social card with no account behind it", () => {
       const data = await card.dataProvider.getSnapshot();
       const need = card.toMetrics(data).find((m) => m.label === "Нужно");
       expect(need?.value.length ?? 0, card.id).toBeGreaterThan(10);
+    }
+  });
+
+  it("shows a dash as its figure, like any other card that does not know", async () => {
+    // The figure is the largest type on the face. Six cards shouting the
+    // same two words in it was the first thing anyone saw in the ring.
+    for (const card of SOCIAL) {
+      const data = await card.dataProvider.getSnapshot();
+      expect(card.toMetrics(data)[0].value, card.id).toBe("—");
     }
   });
 

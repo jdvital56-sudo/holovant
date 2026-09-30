@@ -36,8 +36,12 @@ export function createNotConnectedModule(card: NotConnectedCard): ModuleDefiniti
     dataProvider: {
       getSnapshot: () => ({ state: "not-connected" }),
     },
+    // A dash as the figure and the state underneath it, the way every other
+    // card shows something it does not know. "НЕ ПОДКЛЮЧЁН" as the figure
+    // itself, in the largest type on the card, was honest and was also the
+    // first thing anyone saw on six cards of sixteen.
     toMetrics: () => [
-      { label: "Аккаунт", value: "не подключён" },
+      { label: "не подключено", value: "—" },
       { label: "Нужно", value: card.needs.ru },
     ],
     toAdvice: (_data, lang) => {
