@@ -11,6 +11,7 @@ import { getVolume } from "@/audio/volumeStore";
 import { duckMusic } from "./playMusic";
 import { forSpeech, forVoice, type SpeechLang } from "./speechText";
 import { armWatchdog } from "./speakingWatchdog";
+import { createSynthCache } from "./synthCache";
 
 export type { SpeechLang };
 export { forSpeech, forVoice };
@@ -49,7 +50,11 @@ export function warmUpServerVoice() {
   warmRequested = true;
   void fetch("/api/speak", { method: "GET" })
     .then((response) => {
-      if (response.status === 501) serverVoiceAvailable = false;
+      if (response.status === 501) {
+        serverVoiceAvailable = false;
+        return;
+      }
+      return preloadEverydayLines();
     })
     .catch(() => {
       // Warming is best-effort; speaking will retry and fall back on its own.
@@ -169,32 +174,80 @@ function stopServerVoice() {
  * regardless of what their browser or operating system happens to ship.
  * Returns false when the server cannot do it, so the caller can fall back.
  */
+/** One synthesis request. Null on any failure, so the caller falls back. */
+async function requestAudio(text: string): Promise<Blob | null> {
+  if (!serverVoiceAvailable) return null;
+  const response = await fetch("/api/speak", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+    // Measured on this machine: a sentence is synthesised in 270-450 ms and
+    // the longest paragraph in about 1.8 s. Without a deadline here a
+    // stalled worker never answers, `speaking` is never lowered, and every
+    // question after it is dropped — the microphone goes deaf for the rest
+    // of the session with nothing on screen to say why.
+    signal: AbortSignal.timeout(SPEAK_REQUEST_TIMEOUT_MS),
+  });
+  if (response.status === 501) {
+    // Not configured — a permanent answer, so stop asking every time.
+    serverVoiceAvailable = false;
+    return null;
+  }
+  if (!response.ok) return null;
+  return response.blob();
+}
+
+const synth = createSynthCache(requestAudio);
+
+/**
+ * Asks for a line ahead of time, so it is ready the moment the one playing
+ * ends. At most one line ahead: an answer cut off by "стоп" then leaves one
+ * wasted synthesis in the worker's queue, not the whole tail of the answer
+ * sitting in front of the next reply.
+ */
+function prefetch(text: string | undefined) {
+  if (text && serverVoiceAvailable) void synth.get(text);
+}
+
+/**
+ * The lines said over and over, ready before they are needed. Synthesised one
+ * at a time after the voice has warmed, so they never queue in front of a
+ * question asked in the first seconds.
+ */
+const EVERYDAY_LINES: Record<SpeechLang, string[]> = {
+  ru: [
+    "Секунду, проверяю",
+    "Не понял команду",
+    "Сейчас ничего не играет",
+    "Нечего продолжать",
+    "Ничего не нашёл",
+    "Выключаю музыку",
+  ],
+  en: ["One moment, checking", "Did not catch that", "Nothing is playing"],
+};
+
+async function preloadEverydayLines() {
+  for (const lang of ["ru", "en"] as const) {
+    for (const line of EVERYDAY_LINES[lang]) {
+      if (!serverVoiceAvailable) return;
+      // The key is what will actually be asked for, which is the line after
+      // forVoice has done its work on it.
+      const key = forVoice(line, lang);
+      synth.keep(key);
+      await synth.get(key);
+    }
+  }
+}
+
 async function speakOnServer(text: string, sequence: number): Promise<boolean> {
   if (!serverVoiceAvailable) return false;
   try {
-    const response = await fetch("/api/speak", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      // Measured on this machine: a sentence is synthesised in 270-450 ms and
-      // the longest paragraph in about 1.8 s. Without a deadline here a
-      // stalled worker never answers, `speaking` is never lowered, and every
-      // question after it is dropped — the microphone goes deaf for the rest
-      // of the session with nothing on screen to say why.
-      signal: AbortSignal.timeout(SPEAK_REQUEST_TIMEOUT_MS),
-    });
-
-    if (response.status === 501) {
-      // Not configured — a permanent answer, so stop asking every time.
-      serverVoiceAvailable = false;
-      return false;
-    }
-    if (!response.ok) return false;
+    const blob = await synth.get(text);
+    // Played once and done with, unless it is one of the everyday lines.
+    synth.forget(text);
+    if (!blob) return false;
 
     // A newer line was requested while this one was being synthesised.
-    if (sequence !== speechSequence) return true;
-
-    const blob = await response.blob();
     if (sequence !== speechSequence) return true;
 
     stopServerVoice();
@@ -251,6 +304,9 @@ export function speakQueued(text: string, lang: SpeechLang = "ru") {
   const trimmed = forVoice(text ?? "", lang);
   if (!trimmed) return;
   queue.push({ text: trimmed, lang });
+  // Something is already playing and this is next: start making it now, so
+  // there is no silence at the join.
+  if (draining && queue.length === 1) prefetch(trimmed);
   speaking = true;
   duckMusic(true);
   void drain();
@@ -263,6 +319,8 @@ async function drain() {
     while (queue.length) {
       const next = queue.shift();
       if (!next) break;
+      // The line after this one is made while this one plays.
+      prefetch(queue[0]?.text);
       const sequence = speechSequence;
       await deliver(next.text, next.lang, sequence);
       // A newer interruption bumped the sequence; the rest of this answer is
@@ -299,7 +357,9 @@ async function deliver(text: string, lang: SpeechLang, sequence: number): Promis
 
 function waitForCurrentAudio(): Promise<void> {
   const audio = currentAudio;
-  if (!audio) return Promise.resolve();
+  // A short clip can finish between play() resolving and this line running;
+  // its "ended" has then already fired, and waiting for it would wait forever.
+  if (!audio || audio.ended) return Promise.resolve();
   return new Promise((resolve) => {
     const finish = () => resolve();
     audio.addEventListener("ended", finish, { once: true });
@@ -348,6 +408,8 @@ function buildUtterance(text: string, lang: SpeechLang) {
 export function stopSpeaking() {
   speechSequence++;
   queue.length = 0;
+  // The rest of a cut-off answer will not be said; its audio is not kept.
+  synth.dropTransient();
   // What was said is deliberately kept: the microphone is still carrying the
   // tail of it, and that tail is exactly what must not be taken as a question.
   stopServerVoice();

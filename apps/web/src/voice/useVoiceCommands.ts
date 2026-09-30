@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useOrbitStore } from "@/stores/orbitStore";
-import { playBlip } from "@/audio/audioStore";
+import { ensureAudio, playBlip } from "@/audio/audioStore";
 import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes";
 import { matchIntent, replyFor } from "./commandEngine";
 import { isEchoOfSpeech } from "./echo";
@@ -417,6 +417,10 @@ export function useVoiceCommands() {
     setVoiceStatus("starting");
     wantsRunning.current = true;
 
+    // This click is the gesture the browser needs before any sound. Spent on
+    // the interface tones too, so a question is answered by a tone at once
+    // rather than by a second or two of silence.
+    void ensureAudio().catch(() => {});
     primeVoices();
     const recognition = new Recognition();
     // Russian first: the founder tests in Russian, and the command engine
