@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isForeignOrigin, isRemoteHost, selfOrigin } from "@/server/perimeter";
+import {
+  clientKeyFrom,
+  isForeignOrigin,
+  isRemoteHost,
+  rateBucket,
+  safeEqual,
+  selfOrigin,
+} from "@/server/perimeter";
 
 /**
  * The two locks put on /api/* after a security review, both of which were open
@@ -125,5 +132,90 @@ describe("a caller from across the network", () => {
     // HTTP/1.0 tooling on this machine. The real lock on this door is that the
     // server binds to loopback; this one is the second.
     expect(isRemoteHost(null)).toBe(false);
+  });
+});
+
+/**
+ * Speech had to share one budget with the model, and ran out of it.
+ *
+ * Every sentence the assistant says is its own request to /api/speak, and all
+ * of them counted against the same thirty a minute as /api/chat. A short
+ * lively exchange — a few questions, three-sentence answers, a couple of
+ * confirmations — reaches thirty, the server answers 429, and the browser's
+ * own voice takes over mid-conversation. "The voice changed" has been reported
+ * before and put down to the server dying; this is a second way to cause it.
+ */
+describe("which budget a request spends", () => {
+  it("gives speech a budget of its own, large enough for a real conversation", () => {
+    const speech = rateBucket("/api/speak");
+    // Ten exchanges a minute, three sentences each, plus confirmations and the
+    // phrases warmed at page load: comfortably under this.
+    expect(speech.ceiling).toBeGreaterThanOrEqual(120);
+    expect(speech.name).not.toBe(rateBucket("/api/chat").name);
+  });
+
+  it("keeps the model on its tight budget", () => {
+    // The direction that must not loosen: /api/chat spends real money.
+    for (const path of ["/api/chat", "/api/search", "/api/music"]) {
+      expect(rateBucket(path).ceiling, path).toBe(30);
+    }
+  });
+
+  it("leaves everything else on the ordinary budget", () => {
+    expect(rateBucket("/api/cards").ceiling).toBe(60);
+    expect(rateBucket("/api/health").ceiling).toBe(60);
+  });
+
+  it("does not let a look-alike path borrow the speech budget", () => {
+    expect(rateBucket("/api/speakers").name).not.toBe(rateBucket("/api/speak").name);
+  });
+});
+
+/**
+ * X-Forwarded-For is written by whoever sends the request.
+ *
+ * Keying the rate limit on it meant a caller could name a fresh address on
+ * every request and never be limited at all. It is trusted only when the
+ * operator says a proxy in front of this server sets it.
+ */
+describe("who a caller is, for the rate limit", () => {
+  const headers = (h: Record<string, string>) => (name: string) => h[name.toLowerCase()] ?? null;
+
+  it("ignores a forwarded address nobody vouched for", () => {
+    const a = clientKeyFrom(headers({ "x-forwarded-for": "1.1.1.1" }), false);
+    const b = clientKeyFrom(headers({ "x-forwarded-for": "2.2.2.2" }), false);
+    expect(a).toBe(b);
+  });
+
+  it("uses it when a proxy is declared, which is the one case it is true", () => {
+    const a = clientKeyFrom(headers({ "x-forwarded-for": "1.1.1.1, 10.0.0.1" }), true);
+    const b = clientKeyFrom(headers({ "x-forwarded-for": "2.2.2.2" }), true);
+    expect(a).toBe("1.1.1.1");
+    expect(a).not.toBe(b);
+  });
+});
+
+/**
+ * The shared token, compared in the same time whatever it is compared with.
+ *
+ * `!==` stops at the first different character, so how long a refusal takes
+ * says how much of a guess was right. Hard to use over a real network, and a
+ * few lines to close.
+ */
+describe("comparing the access token", () => {
+  it("accepts the right one", () => {
+    expect(safeEqual("correct-horse", "correct-horse")).toBe(true);
+  });
+
+  it("refuses a wrong one, a near miss, and one of a different length", () => {
+    expect(safeEqual("correct-horse", "correct-house")).toBe(false);
+    expect(safeEqual("correct-horse", "correct-horse-battery")).toBe(false);
+    expect(safeEqual("correct-horse", "")).toBe(false);
+    expect(safeEqual("", "correct-horse")).toBe(false);
+  });
+
+  it("refuses when nothing was presented at all", () => {
+    expect(safeEqual(undefined, "correct-horse")).toBe(false);
+    expect(safeEqual(null, "correct-horse")).toBe(false);
   });
 });

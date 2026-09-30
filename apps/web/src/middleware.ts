@@ -1,5 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isForeignOrigin, isRemoteHost, selfOrigin } from "@/server/perimeter";
+import {
+  clientKeyFrom,
+  isForeignOrigin,
+  isRemoteHost,
+  rateBucket,
+  safeEqual,
+  selfOrigin,
+} from "@/server/perimeter";
 
 /**
  * The perimeter around /api/*.
@@ -33,21 +40,6 @@ import { isForeignOrigin, isRemoteHost, selfOrigin } from "@/server/perimeter";
 const hits = new Map<string, number[]>();
 
 const WINDOW_MS = 60_000;
-/** Generous for a person talking, nowhere near enough to drain an API budget. */
-const MAX_PER_WINDOW = 60;
-/** Speech and chat are the expensive ones and are held to a tighter count. */
-const COSTLY = /^\/api\/(chat|speak|search|music)/;
-const MAX_COSTLY_PER_WINDOW = 30;
-
-function clientKey(req: NextRequest): string {
-  // No x-forwarded-for on a local request; the fallback keeps one bucket
-  // rather than letting every unknown caller have its own.
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "local"
-  );
-}
 
 function overLimit(key: string, ceiling: number): boolean {
   const now = Date.now();
@@ -67,10 +59,13 @@ function overLimit(key: string, ceiling: number): boolean {
 
 export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
-  const key = clientKey(req);
-  const ceiling = COSTLY.test(path) ? MAX_COSTLY_PER_WINDOW : MAX_PER_WINDOW;
+  const key = clientKeyFrom(
+    (name) => req.headers.get(name),
+    process.env.HOLOVANT_TRUST_PROXY === "1",
+  );
+  const bucket = rateBucket(path);
 
-  if (overLimit(`${key}:${COSTLY.test(path) ? "costly" : "plain"}`, ceiling)) {
+  if (overLimit(`${key}:${bucket.name}`, bucket.ceiling)) {
     return NextResponse.json(
       { error: "Too many requests." },
       { status: 429, headers: { "Retry-After": "60" } },
@@ -108,7 +103,7 @@ export function middleware(req: NextRequest) {
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ||
     req.cookies.get("hv_session")?.value;
 
-  if (presented !== required) {
+  if (!safeEqual(presented, required)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

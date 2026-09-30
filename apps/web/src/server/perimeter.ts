@@ -73,3 +73,67 @@ export function isRemoteHost(host: string | null): boolean {
   const name = host.replace(/:\d+$/, "").toLowerCase();
   return !LOOPBACK_HOSTS.has(name);
 }
+
+export interface RateBucket {
+  name: "speech" | "costly" | "plain";
+  /** Requests allowed per minute. */
+  ceiling: number;
+}
+
+/**
+ * Which budget a request spends.
+ *
+ * Speech used to share the model's thirty a minute. Every sentence is its own
+ * request to /api/speak, so a lively exchange ran the shared budget out, the
+ * server answered 429, and the browser's voice took over mid-conversation.
+ * Synthesis is local CPU, not money; the model is money. They are held apart.
+ */
+export function rateBucket(path: string): RateBucket {
+  // Exact segment, so /api/speakers is not speech.
+  if (/^\/api\/speak(?:\/|$)/.test(path)) return { name: "speech", ceiling: 180 };
+  if (/^\/api\/(chat|search|music)(?:\/|$)/.test(path)) return { name: "costly", ceiling: 30 };
+  return { name: "plain", ceiling: 60 };
+}
+
+/**
+ * Who a caller is, for the rate limit.
+ *
+ * X-Forwarded-For is written by whoever sends the request, so keying on it
+ * let a caller name a fresh address every time and never be limited. It is
+ * read only when the operator has said a proxy in front sets it
+ * (HOLOVANT_TRUST_PROXY=1); otherwise every caller is the one local bucket,
+ * which is also the truth for a server bound to loopback.
+ *
+ * @param header reads one request header by name
+ * @param trustProxy whether a proxy in front of this server sets the header
+ */
+export function clientKeyFrom(
+  header: (name: string) => string | null,
+  trustProxy: boolean,
+): string {
+  if (!trustProxy) return "local";
+  // The first entry is the client; later ones are the proxies it passed.
+  return (
+    header("x-forwarded-for")?.split(",")[0]?.trim() ||
+    header("x-real-ip")?.trim() ||
+    "local"
+  );
+}
+
+/**
+ * Compares two secrets in the same time whatever they contain.
+ *
+ * `!==` stops at the first different character, so how long a refusal takes
+ * says how much of a guess was right. node:crypto's timingSafeEqual is not
+ * available here: middleware runs on the edge runtime.
+ */
+export function safeEqual(presented: string | null | undefined, expected: string): boolean {
+  if (typeof presented !== "string" || !expected) return false;
+  // Walked over the expected length every time, so a short guess costs the
+  // same as a long one; a length mismatch is folded in rather than returned.
+  let difference = presented.length ^ expected.length;
+  for (let i = 0; i < expected.length; i++) {
+    difference |= (presented.charCodeAt(i) || 0) ^ expected.charCodeAt(i);
+  }
+  return difference === 0;
+}
