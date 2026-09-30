@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { securityHeaders } from "./src/server/securityHeaders";
 
 const nextConfig: NextConfig = {
   images: {
@@ -9,6 +10,9 @@ const nextConfig: NextConfig = {
     // libheif advisories this app has no use for. Turning it off removes the
     // endpoint and makes all of that moot.
     unoptimized: true,
+  },
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders() }];
   },
 };
 
