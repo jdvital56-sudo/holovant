@@ -10,6 +10,7 @@ import { meterAudioElement } from "@/audio/voiceLevel";
 import { getVolume } from "@/audio/volumeStore";
 import { duckMusic } from "./playMusic";
 import { forSpeech, forVoice, type SpeechLang } from "./speechText";
+import { armWatchdog } from "./speakingWatchdog";
 
 export type { SpeechLang };
 export { forSpeech, forVoice };
@@ -110,6 +111,9 @@ export function isSystemSpeaking() {
 let recentlySpoken: Array<{ text: string; at: number }> = [];
 const RECENT_WINDOW_MS = 60_000;
 
+/** A sentence is synthesised in 270-450 ms; this is far outside that. */
+const SPEAK_REQUEST_TIMEOUT_MS = 6000;
+
 function rememberSpoken(text: string) {
   const now = Date.now();
   recentlySpoken.push({ text: text.toLowerCase(), at: now });
@@ -172,6 +176,12 @@ async function speakOnServer(text: string, sequence: number): Promise<boolean> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
+      // Measured on this machine: a sentence is synthesised in 270-450 ms and
+      // the longest paragraph in about 1.8 s. Without a deadline here a
+      // stalled worker never answers, `speaking` is never lowered, and every
+      // question after it is dropped — the microphone goes deaf for the rest
+      // of the session with nothing on screen to say why.
+      signal: AbortSignal.timeout(SPEAK_REQUEST_TIMEOUT_MS),
     });
 
     if (response.status === 501) {
@@ -270,13 +280,21 @@ async function drain() {
 /** Speaks one line and resolves when its audio has finished, not when it starts. */
 async function deliver(text: string, lang: SpeechLang, sequence: number): Promise<void> {
   rememberSpoken(text);
-  const playedOnServer = await speakOnServer(text, sequence);
-  if (sequence !== speechSequence) return;
-  if (playedOnServer) {
-    await waitForCurrentAudio();
-    return;
+  // Nothing below is guaranteed to finish: a request can stall past its own
+  // deadline, and audio that never starts never ends. The latch lets go by
+  // itself rather than waiting for a path nobody thought of.
+  const disarm = armWatchdog(markDone);
+  try {
+    const playedOnServer = await speakOnServer(text, sequence);
+    if (sequence !== speechSequence) return;
+    if (playedOnServer) {
+      await waitForCurrentAudio();
+      return;
+    }
+    await speakInBrowserAwaited(text, lang);
+  } finally {
+    disarm();
   }
-  await speakInBrowserAwaited(text, lang);
 }
 
 function waitForCurrentAudio(): Promise<void> {
