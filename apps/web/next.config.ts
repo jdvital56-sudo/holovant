@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    // Nothing in this app uses next/image, but the optimiser endpoint at
+    // /_next/image is served anyway, and the middleware only matches /api/*
+    // — so the perimeter does not cover it. It has had two unauthenticated
+    // RCEs of its own and it drags in sharp, which carries libvips and
+    // libheif advisories this app has no use for. Turning it off removes the
+    // endpoint and makes all of that moot.
+    unoptimized: true,
+  },
 };
 
 export default nextConfig;
