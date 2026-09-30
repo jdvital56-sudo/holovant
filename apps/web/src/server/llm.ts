@@ -222,9 +222,23 @@ export async function* streamChat(
 
     conversation.push({ role: "assistant", content: "", tool_calls: collected.toolCalls });
 
-    // Sequential rather than parallel: these are one or two cheap calls, and
-    // ordering keeps the transcript readable when something goes wrong.
-    for (const call of collected.toolCalls) {
+    // Lookups run together. They used to run one after another, so asking for
+    // the weather and the rates together cost the two waits added up — and
+    // every second here is a second of silence before the first word. The
+    // results are still written back in the order the model asked for them,
+    // so the transcript reads the same.
+    const lookups = collected.toolCalls.map((call) =>
+      isActionTool(call.function.name)
+        ? null
+        : // Caught here, not where it is awaited: a second lookup failing
+          // while the first is still being waited on would otherwise be an
+          // unhandled rejection and take the whole answer down.
+          runTool(call.function.name, call.function.arguments).catch(
+            () => "That lookup failed. Tell the user plainly rather than guessing.",
+          ),
+    );
+
+    for (const [index, call] of collected.toolCalls.entries()) {
       // An action belongs to the browser, where the interface is. The server
       // decides on it, sends it down the stream, and tells the model it is
       // under way — it does not wait to be told the module opened, which the
@@ -244,8 +258,8 @@ export async function* streamChat(
         continue;
       }
 
-      const result = await runTool(call.function.name, call.function.arguments);
-      conversation.push({ role: "tool", tool_call_id: call.id, content: asData(result) });
+      const result = await lookups[index];
+      conversation.push({ role: "tool", tool_call_id: call.id, content: asData(result ?? "") });
     }
   }
 }
