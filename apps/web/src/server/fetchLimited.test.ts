@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { readCapped, ResponseTooLarge } from "@/server/fetchLimited";
+import { describe, expect, it, vi } from "vitest";
+import { fetchLimited, readCapped, ResponseTooLarge } from "@/server/fetchLimited";
 
 /**
  * A limit on how much of somebody else's answer is read into memory.
@@ -80,5 +80,61 @@ describe("what the cap must not touch", () => {
     const feed = entry.repeat(134);
     const read = await readCapped(streamed([encode(feed)]), 5_000_000);
     expect(read).toBe(feed);
+  });
+});
+
+/**
+ * Redirects are followed by hand so that every hop is checked. A public
+ * address that answers "go to the metadata address" is the classic way past
+ * a check that only looks at the first URL.
+ */
+describe("following a redirect", () => {
+  const publicDns = async () => ["93.184.216.34"];
+
+  it("refuses a public address that redirects inside the network", async () => {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        asked.push(url);
+        return new Response(null, {
+          status: 302,
+          headers: { location: "http://169.254.169.254/latest/meta-data/" },
+        });
+      }),
+    );
+    await expect(
+      fetchLimited("https://feed.example/cal.ics", { maxBytes: 1000 }, publicDns),
+    ).rejects.toThrow("Refused");
+    // The private address was never actually requested.
+    expect(asked).toEqual(["https://feed.example/cal.ics"]);
+    vi.unstubAllGlobals();
+  });
+
+  it("still follows an ordinary redirect to a public address", async () => {
+    // The direction that must not break: calendars and APIs do redirect.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.endsWith("/old")
+          ? new Response(null, { status: 301, headers: { location: "/new" } })
+          : new Response("календарь", { status: 200 }),
+      ),
+    );
+    await expect(
+      fetchLimited("https://feed.example/old", { maxBytes: 1000 }, publicDns),
+    ).resolves.toBe("календарь");
+    vi.unstubAllGlobals();
+  });
+
+  it("gives up on a redirect loop instead of following it forever", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 302, headers: { location: "/again" } })),
+    );
+    await expect(
+      fetchLimited("https://feed.example/again", { maxBytes: 1000 }, publicDns),
+    ).rejects.toThrow("Too many redirects");
+    vi.unstubAllGlobals();
   });
 });

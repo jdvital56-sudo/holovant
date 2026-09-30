@@ -27,3 +27,13 @@ jobs:
       - run: pnpm --filter web lint
 
       - run: pnpm --filter web test
+
+      # Tests and types can pass while the build fails: browser code that
+      # reaches a Node built-in is only caught when the bundle is made.
+      - run: pnpm --filter web build
+
+      # Two critical Next.js advisories sat in the lockfile for weeks with
+      # nothing to point at them. Critical fails the run. High is not gated:
+      # four high advisories remain in sharp and postcss, which only a major
+      # Next upgrade removes, and a check that is always red gets ignored.
+      - run: pnpm audit --prod --audit-level=critical

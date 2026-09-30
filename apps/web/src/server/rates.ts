@@ -80,14 +80,8 @@ export function buildRows(
   ];
 }
 
-/** A figure a person reads, not one a machine printed: 48,25 and 79 003. */
-export function formatRate(row: RateRow): string {
-  if (row.value === null) return "—";
-  return row.value.toLocaleString("ru-RU", {
-    minimumFractionDigits: row.decimals,
-    maximumFractionDigits: row.decimals,
-  });
-}
+// Kept importable from here for the server side; the card imports it from lib.
+export { formatRate } from "@/lib/formatRate";
 
 async function readJson(url: string): Promise<unknown | null> {
   try {

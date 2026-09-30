@@ -8,6 +8,8 @@
  * replaced in flight, it is somebody else's choice.
  */
 
+import { assertPublicDestination, type Resolve } from "./destination";
+
 export class ResponseTooLarge extends Error {
   constructor(maxBytes: number) {
     super(`Response is larger than ${maxBytes} bytes.`);
@@ -52,11 +54,35 @@ export interface LimitedFetch {
   maxBytes: number;
 }
 
-/** Fetches and reads within both limits, or throws. */
-export async function fetchLimited(url: string, limits: LimitedFetch): Promise<string> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(limits.timeoutMs ?? 8000) });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return readCapped(response, limits.maxBytes);
+/** Enough for any real feed; a chain longer than this is a loop or a trick. */
+const MAX_REDIRECTS = 5;
+
+/**
+ * Fetches and reads within both limits, or throws.
+ *
+ * Redirects are followed by hand so that every hop is checked. Left to fetch,
+ * a public address could answer "go to 169.254.169.254" and the check on the
+ * first address would have been for nothing.
+ */
+export async function fetchLimited(
+  url: string,
+  limits: LimitedFetch,
+  resolve?: Resolve,
+): Promise<string> {
+  const signal = AbortSignal.timeout(limits.timeoutMs ?? 8000);
+  let current = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    await assertPublicDestination(current, resolve);
+    const response = await fetch(current, { signal, redirect: "manual" });
+    const location = response.headers.get("location");
+    if (response.status >= 300 && response.status < 400 && location) {
+      current = new URL(location, current).toString();
+      continue;
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return readCapped(response, limits.maxBytes);
+  }
+  throw new Error("Too many redirects.");
 }
 
 /** The same, for a reply that should be JSON. */

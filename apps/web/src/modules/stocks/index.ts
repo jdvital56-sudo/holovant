@@ -1,7 +1,7 @@
 import type { ModuleDefinition } from "@holovant/module-contracts";
 import type { CardsRates } from "@/app/api/cards/route";
 import { createCardProvider } from "@/lib/createCardProvider";
-import { formatRate } from "@/server/rates";
+import { formatRate } from "@/lib/formatRate";
 
 /**
  * The rates he watches: the lira against the dollar and the euro, the hryvnia,
