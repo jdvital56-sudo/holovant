@@ -193,6 +193,12 @@ export async function* streamChat(
   if (!apiKey) throw new Error("No language model is configured.");
 
   const conversation = [...messages];
+  // His own turns only — never the system messages, which carry his notes and
+  // search results. Writes to his memory are checked against these words.
+  const userSaid = messages
+    .filter((m) => m.role === "user")
+    .map((m) => String(m.content ?? ""))
+    .join("\n");
 
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     const collected: PassResult = { toolCalls: [], finishReason: null };
@@ -233,7 +239,7 @@ export async function* streamChat(
         : // Caught here, not where it is awaited: a second lookup failing
           // while the first is still being waited on would otherwise be an
           // unhandled rejection and take the whole answer down.
-          runTool(call.function.name, call.function.arguments).catch(
+          runTool(call.function.name, call.function.arguments, { userSaid }).catch(
             () => "That lookup failed. Tell the user plainly rather than guessing.",
           ),
     );

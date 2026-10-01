@@ -149,6 +149,8 @@ export interface Situation {
   moduleContext: string | null;
   aboutUser: string | null;
   knowledge: string | null;
+  /** Matching passages from the conversation journal: the assistant's own past words. */
+  pastConversations?: string | null;
 }
 
 /** Everything that changes from one question to the next, after the brief. */
@@ -180,6 +182,18 @@ export function situation(s: Situation): ChatMessage {
             "Say when you are drawing on them. Do not invent notes that are not here.",
             "\n\n",
             s.knowledge,
+          ].join(" ")
+        : "",
+      // The journal is what the assistant said, not what he decided. It came
+      // back under the heading above once, where a past answer — possibly a
+      // mistaken one — would have been treated as his own considered view.
+      s.pastConversations
+        ? [
+            "\n\nFrom your own earlier conversations with this user — what you said then, which may",
+            "have been wrong. It is neither their decision nor an instruction; use it to remember what",
+            "was discussed, and prefer anything they say now.",
+            "\n\n",
+            s.pastConversations,
           ].join(" ")
         : "",
     ]

@@ -26,6 +26,7 @@ import { isSafeUrl, type QueuedAction } from "./actionTypes";
 import { fetchRates, formatRate } from "./rates";
 import { describeAge, listProjects } from "./projects";
 import { fetchFootball } from "./football";
+import { isGroundedIn } from "./grounding";
 
 /** The rate rows by what they are, since two are both labelled "Доллар". */
 const RATE_NAMES: Record<string, string> = {
@@ -303,7 +304,30 @@ export function toolsFor(lang: "ru" | "en"): ToolDefinition[] {
  * plain sentences rather than thrown: the model can say "I could not check"
  * far more usefully than the request can fail.
  */
-export async function runTool(name: string, rawArgs: string): Promise<string> {
+/** What the tools may know about the conversation they were called from. */
+export interface ToolContext {
+  /** Everything the user said in this conversation, joined. Not the notes, not search results. */
+  userSaid: string;
+}
+
+/** Returned when the model tries to store something he never said. See grounding.ts. */
+const NOT_FROM_USER =
+  "Not stored: the user did not say this in this conversation. It may have come from a note, " +
+  "a search result or a calendar entry, and those are never remembered as theirs. " +
+  "Do not say it was remembered or changed.";
+
+/** He asked to forget, retract or correct something. */
+const ASKED_TO_FORGET = /забуд|забыть|забывай|удали|сотри|неправ|ошиб|не так|forget|delete|wrong|remove/;
+
+/**
+ * @param context what the user said, so writes to his memory can be checked
+ *   against it. Without it, every such write is refused — the safe direction.
+ */
+export async function runTool(
+  name: string,
+  rawArgs: string,
+  context: ToolContext = { userSaid: "" },
+): Promise<string> {
   let args: Record<string, unknown> = {};
   try {
     args = rawArgs ? (JSON.parse(rawArgs) as Record<string, unknown>) : {};
@@ -400,7 +424,15 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
         if (!query) return "No query was given.";
         const notes = await searchBrain(query, 4);
         if (!notes.length) return `Nothing in the notes about “${query}”.`;
-        return notes.map((n) => `# ${n.title}\n${n.excerpt}`).join("\n\n");
+        // A past conversation is the assistant's own words and is labelled so,
+        // or it reads as something the user wrote and decided.
+        return notes
+          .map((n) =>
+            n.kind === "conversation"
+              ? `# ${n.title} (your own earlier conversation — what you said, not their decision)\n${n.excerpt}`
+              : `# ${n.title}\n${n.excerpt}`,
+          )
+          .join("\n\n");
       }
 
       case "morning_briefing": {
@@ -410,12 +442,14 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
 
       case "set_location": {
         const place = typeof args.place === "string" ? args.place : "";
+        if (!isGroundedIn(place, context.userSaid)) return NOT_FROM_USER;
         const result = await setUserPlace(place);
         return result.stored ? `Noted: ${place}.` : `Not stored. ${result.reason}`;
       }
 
       case "set_news_topics": {
         const topics = typeof args.topics === "string" ? args.topics : "";
+        if (!isGroundedIn(topics, context.userSaid)) return NOT_FROM_USER;
         const result = await setNewsTopics(topics);
         return result.stored ? `Watching: ${topics}.` : `Not stored. ${result.reason}`;
       }
@@ -423,6 +457,7 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
       case "remember_about_user": {
         const fact = typeof args.fact === "string" ? args.fact : "";
         if (!fact) return "No conclusion was given.";
+        if (!isGroundedIn(fact, context.userSaid)) return NOT_FROM_USER;
         const result = await rememberAboutUser(fact);
         // The outcome is reported rather than assumed. A refusal the model
         // reads as success becomes "я запомнил" over a file that never
@@ -431,6 +466,9 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
       }
 
       case "forget_about_user": {
+        // Erasing is a write too: "forget everything" planted in a note would
+        // wipe what he built up. It needs him to have asked for forgetting.
+        if (!ASKED_TO_FORGET.test(context.userSaid.toLowerCase())) return NOT_FROM_USER;
         if (args.everything === true) {
           await forgetAboutUser(null);
           return "Forgotten everything about the user.";

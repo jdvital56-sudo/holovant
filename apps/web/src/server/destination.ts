@@ -44,20 +44,54 @@ function v4Private(ip: string): boolean {
   );
 }
 
+/**
+ * An IPv6 address as its eight 16-bit groups.
+ *
+ * Judged as numbers, not as text, because the same address has many
+ * spellings. The first version matched "::ffff:127.0.0.1" as written — but
+ * the URL parser rewrites that to "::ffff:7f00:1" before this code ever sees
+ * it, so loopback and the metadata address passed in the form that actually
+ * arrives, while the test, written in the other form, stayed green.
+ */
+function v6Groups(ip: string): number[] | null {
+  let text = ip.toLowerCase();
+  // A trailing dotted IPv4 part becomes the last two groups.
+  const dotted = text.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) {
+    const [a, b, c, d] = dotted[2].split(".").map(Number);
+    text = `${dotted[1]}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return null;
+  const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill("0"), ...tail].map(
+    (g) => parseInt(g, 16),
+  );
+  return groups.length === 8 && groups.every((g) => g >= 0 && g <= 0xffff) ? groups : null;
+}
+
 /** True for any address that is not on the public internet. */
 export function isPrivateAddress(ip: string): boolean {
   const version = isIP(ip);
   if (version === 4) return v4Private(ip);
   if (version === 6) {
-    const lower = ip.toLowerCase();
-    if (lower === "::" || lower === "::1") return true;
-    // An IPv4 address written as IPv6 is judged as the IPv4 address it is.
-    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return v4Private(mapped[1]);
+    const g = v6Groups(ip);
+    // Unparseable is refused: it cannot be shown to be public.
+    if (!g) return true;
+    const leadingZeros = g.slice(0, 5).every((x) => x === 0);
+    // ::ffff:a.b.c.d (mapped) and ::a.b.c.d (the old compatible form) are the
+    // IPv4 address in disguise, and are judged as that address. :: and ::1
+    // fall under the second: 0.0.0.0 and 0.0.0.1.
+    if (leadingZeros && (g[5] === 0xffff || g[5] === 0)) {
+      const v4 = `${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`;
+      return v4Private(v4);
+    }
     return (
-      lower.startsWith("fc") || // unique local, fc00::/7
-      lower.startsWith("fd") ||
-      /^fe[89ab]/.test(lower) // link-local, fe80::/10
+      (g[0] & 0xfe00) === 0xfc00 || // unique local, fc00::/7
+      (g[0] & 0xffc0) === 0xfe80 // link-local, fe80::/10
     );
   }
   // Not an address at all: nothing to judge, and the caller resolves names.

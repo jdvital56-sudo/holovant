@@ -95,14 +95,20 @@ export async function POST(request: Request) {
   // Stripped of invisible characters before it goes anywhere near the prompt.
   // A note can arrive from anywhere — synced from another machine, pasted from
   // a page — and an action envelope is made of two characters nobody can see.
-  const knowledge = notes.length
-    ? stripControlCharacters(
-        notes
-          .slice(0, 3)
-          .map((note) => `# ${note.title}\n${note.excerpt}`)
-          .join("\n\n"),
-      ).slice(0, MAX_KNOWLEDGE_CHARS)
-    : null;
+  // His notes and the assistant's own past conversations are found by the
+  // same search but are not the same kind of thing, and go to the model under
+  // different headings — see prompt.ts.
+  const asText = (found: typeof notes) =>
+    found.length
+      ? stripControlCharacters(
+          found
+            .slice(0, 3)
+            .map((note) => `# ${note.title}\n${note.excerpt}`)
+            .join("\n\n"),
+        ).slice(0, MAX_KNOWLEDGE_CHARS)
+      : null;
+  const knowledge = asText(notes.filter((note) => note.kind !== "conversation"));
+  const pastConversations = asText(notes.filter((note) => note.kind === "conversation"));
 
   // Read here rather than accepted from the caller, for the same reason the
   // notes are: this text goes into the system prompt, and anything a caller
@@ -115,7 +121,7 @@ export async function POST(request: Request) {
   // match it; everything that changes follows it.
   const messages = [
     stableBrief(assistantName, lang),
-    situation({ now: new Date(), place, lang, moduleContext, aboutUser, knowledge }),
+    situation({ now: new Date(), place, lang, moduleContext, aboutUser, knowledge, pastConversations }),
     ...history,
   ];
   const encoder = new TextEncoder();

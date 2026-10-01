@@ -84,6 +84,28 @@ describe("where the server may fetch from", () => {
     await expect(assertPublicDestination("https://split.example/", resolve)).rejects.toThrow("Refused");
   });
 
+  it("refuses an IPv4 address dressed as IPv6, in the form Node actually produces", async () => {
+    // Found in the security re-test. The URL parser rewrites
+    // [::ffff:127.0.0.1] as [::ffff:7f00:1] before this code sees it, and
+    // the check knew only the dotted spelling — so the test passed while the
+    // real path let loopback and the metadata address through.
+    for (const url of [
+      "http://[::ffff:127.0.0.1]/",
+      "http://[0:0:0:0:0:ffff:127.0.0.1]/",
+      "http://[::ffff:7f00:1]:3000/api/brain",
+      "http://[::ffff:a9fe:a9fe]/latest/meta-data/", // 169.254.169.254
+      "http://[::ffff:c0a8:101]/", // 192.168.1.1
+      "http://[::127.0.0.1]/", // the old IPv4-compatible form
+    ]) {
+      await expect(assertPublicDestination(url, dns({})), url).rejects.toThrow("Refused");
+    }
+  });
+
+  it("still lets a public IPv4 through when it is written as IPv6", async () => {
+    // 8.8.8.8 as ::ffff:808:808 — public, so allowed.
+    await expect(assertPublicDestination("http://[::ffff:8.8.8.8]/", dns({}))).resolves.toBeUndefined();
+  });
+
   it("refuses localhost and anything that is not a web address", async () => {
     for (const url of ["http://localhost:3000/", "http://app.localhost/", "file:///C:/Users/secret.txt", "ftp://x.example/", "not a url"]) {
       await expect(assertPublicDestination(url, dns({})), url).rejects.toThrow("Refused");

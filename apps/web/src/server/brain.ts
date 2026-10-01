@@ -17,6 +17,8 @@ export interface BrainNote {
   excerpt: string;
   /** Higher is a better match. */
   score: number;
+  /** His own note, or a past conversation written by the assistant. */
+  kind: NoteKind;
 }
 
 const MAX_FILE_BYTES = 512 * 1024;
@@ -143,6 +145,23 @@ interface IndexedNote {
   title: string;
   text: string;
   mtimeMs: number;
+  kind: NoteKind;
+}
+
+/**
+ * Whose words a note holds.
+ *
+ * The conversation journal lives in the same vault and is searched with the
+ * rest, which is what lets the assistant remember yesterday. But it came back
+ * to the model under the heading "the user's own notes — what this user
+ * actually decided", and it is nothing of the kind: it is what the assistant
+ * said, which may have been wrong. Kept apart so it can be labelled as that.
+ */
+export type NoteKind = "note" | "conversation";
+
+function kindOf(raw: string): NoteKind {
+  const front = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  return front && /\btype:\s*journal\b/.test(front[1]) ? "conversation" : "note";
 }
 
 /**
@@ -198,6 +217,7 @@ async function loadIndex(root: string): Promise<IndexedNote[]> {
         title: titleFrom(raw, file),
         text: toPlainText(raw),
         mtimeMs: info.mtimeMs,
+        kind: kindOf(raw),
       };
       cache.set(file, entry);
       notes.push(entry);
@@ -235,6 +255,7 @@ export async function searchBrain(query: string, limit = 5): Promise<BrainNote[]
       title: note.title,
       excerpt: excerptAround(note.text, terms),
       score,
+      kind: note.kind,
     });
   }
 
@@ -274,6 +295,9 @@ export async function notesForDay(day: Date, limit = 4): Promise<BrainNote[]> {
   const found: BrainNote[] = [];
 
   for (const note of notes) {
+    // The journal is filed by date, so every day's conversation would match
+    // "today" and be read out in the briefing as a note he wrote for it.
+    if (note.kind === "conversation") continue;
     const lower = note.text.toLowerCase();
     const hit = spellings.find((spelling) => lower.includes(spelling));
     if (!hit) continue;
@@ -282,6 +306,7 @@ export async function notesForDay(day: Date, limit = 4): Promise<BrainNote[]> {
       title: note.title,
       excerpt: excerptAround(note.text, [hit]),
       score: 1,
+      kind: note.kind,
     });
   }
 

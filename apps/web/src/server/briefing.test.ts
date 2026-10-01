@@ -142,7 +142,7 @@ describe("what a full morning reads as", () => {
       { start: new Date(2026, 7, 31, 9, 0), allDay: false, summary: "Планёрка" },
       { start: new Date(2026, 7, 31, 0, 0), allDay: true, summary: "Отпуск Веры" },
     ],
-    notes: [{ path: "Заметки/План.md", title: "План", excerpt: "закрыть жесты", score: 10 }],
+    notes: [{ path: "Заметки/План.md", title: "План", excerpt: "закрыть жесты", score: 10, kind: "note" }],
     tasks: [{ note: "Дубистэй", text: "подготовить оффер" }],
   };
 
