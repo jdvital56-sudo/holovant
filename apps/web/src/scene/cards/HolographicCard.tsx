@@ -1,7 +1,7 @@
 "use client";
 
 import { Html } from "@react-three/drei";
-import { useOrbitStore, setHovered } from "@/stores/orbitStore";
+import { useOrbitStore, setHovered, getFrontModuleId } from "@/stores/orbitStore";
 import { useCardStyleStore } from "@/stores/cardStyleStore";
 import { useModuleMetrics, useModuleAccountCount } from "@/modules/moduleDataStore";
 import type { ModuleDefinition } from "@holovant/module-contracts";
@@ -31,9 +31,16 @@ export function HolographicCard({ module, x, z, rotationY, depthFactor }: Hologr
 
   const isSelected = state === "selected" || state === "expanded";
   const isHovered = state === "hovered";
-  /** Front-facing cards open on click; the rest first travel to the front, so
-   * clicking to steer the carousel never fires a panel the user didn't ask for. */
-  const isFrontmost = depthFactor > 0.85;
+  /**
+   * The front card opens on click; the rest first travel to the front, so
+   * clicking to steer the carousel never fires a panel nobody asked for.
+   *
+   * Decided by which card the ring is centred on, not by how squarely this one
+   * faces the viewer. That was a threshold of 0.85 — and with sixteen cards a
+   * neighbour sits 22.5° off, which faces the viewer at 0.92, so clicking a
+   * neighbour opened it instead of turning it to the front.
+   */
+  const isFrontmost = () => getFrontModuleId() === module.id;
   const accent = module.themeColor;
 
   // Cards on the far arc are turned away from the camera, so their text would
@@ -67,7 +74,7 @@ export function HolographicCard({ module, x, z, rotationY, depthFactor }: Hologr
       <Html transform occlude={false} distanceFactor={2.6} style={{ pointerEvents: "auto" }}>
         <div
           onClick={() =>
-            dispatch({ type: isFrontmost ? "expand" : "select", cardId: module.id, source: "mouse" })
+            dispatch({ type: isFrontmost() ? "expand" : "select", cardId: module.id, source: "mouse" })
           }
           onPointerEnter={() => setHovered(module.id)}
           onPointerLeave={() => setHovered(null)}

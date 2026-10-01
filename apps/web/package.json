@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e:voice": "node e2e/voice.e2e.mjs"
+    "e2e:voice": "node e2e/voice.e2e.mjs",
+    "e2e:ui": "node e2e/ui.e2e.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

@@ -25,6 +25,12 @@ export function TestProbe() {
       playing: () => usePlayStore.getState().status,
       face: () => useVitaStore.getState().visible,
       open: () => useOrbitStore.getState().expandedId,
+      // Everything the ring holds that is plain data, for when "it did not
+      // open" needs to become "it selected instead of expanding".
+      orbit: () =>
+        Object.fromEntries(
+          Object.entries(useOrbitStore.getState()).filter(([, v]) => typeof v !== "function"),
+        ),
       lastCommand: () => useVoiceStore.getState().lastCommand,
     };
   }, []);

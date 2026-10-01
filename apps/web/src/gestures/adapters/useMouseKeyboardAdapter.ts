@@ -21,7 +21,10 @@ export function useMouseKeyboardAdapter(targetRef: React.RefObject<HTMLElement |
       dragging.current = true;
       dragDistance.current = 0;
       lastX.current = e.clientX;
-      el?.setPointerCapture(e.pointerId);
+      // No pointer capture here. Capturing on press sent every click to this
+      // container instead of the card under the cursor, so "click the front
+      // card to open it" — written on screen — never opened anything. A press
+      // that has not moved yet is still a click.
     }
 
     function onPointerMove(e: PointerEvent) {
@@ -29,6 +32,12 @@ export function useMouseKeyboardAdapter(targetRef: React.RefObject<HTMLElement |
       const dx = e.clientX - lastX.current;
       lastX.current = e.clientX;
       dragDistance.current += Math.abs(dx);
+      // Now it is a drag: capture, so the rotation keeps up even if the cursor
+      // leaves the scene — and so the release is not taken as a click on
+      // whichever card it happens to end over.
+      if (dragDistance.current > DRAG_THRESHOLD_PX && !el?.hasPointerCapture(e.pointerId)) {
+        el?.setPointerCapture(e.pointerId);
+      }
       useOrbitStore.setState((s) => ({ rotation: s.rotation + dx * 0.3 }));
     }
 
@@ -53,5 +62,8 @@ export function useMouseKeyboardAdapter(targetRef: React.RefObject<HTMLElement |
     };
   }, [targetRef, dispatch]);
 
-  return { wasDrag: () => dragDistance.current > 4 };
+  return { wasDrag: () => dragDistance.current > DRAG_THRESHOLD_PX };
 }
+
+/** Movement under this is a hand that is not quite still, not a drag. */
+const DRAG_THRESHOLD_PX = 4;
