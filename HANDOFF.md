@@ -3,6 +3,40 @@
 Written for whoever picks this up next, including a different AI. The code is
 the source of truth; this is the part the code cannot tell you.
 
+## 1 October 2026: where it stands now
+
+Read this section first; the rest of the file is older and some of it is
+history. 660 unit tests, plus two browser suites that drive the real page.
+
+**Run it** with `pnpm --filter web build` then `pnpm --filter web start` from
+the repository root. Port 3000, bound to 127.0.0.1. It does not survive a
+reboot unless a Windows startup task is set up.
+
+**Check it** with `typecheck`, `lint`, `test`, and — against a started server —
+`pnpm --filter web e2e:voice` (18 checks) and `e2e:ui` (6). Both need
+`HOLOVANT_CHROME` pointing at a Chromium. They replace the browser's speech
+recogniser with one the test speaks through, and read state from
+`window.__holovant`, which exists only when the page is opened with `?e2e`.
+The most-repaired file, `voice/useVoiceCommands.ts`, had never been tested
+whole before this; run `e2e:voice` before and after touching it.
+
+**Not connected, on purpose:** Instagram, TikTok, YouTube, X, LinkedIn and
+Telegram say so on the card. They need the owner's accounts and developer
+keys. Do not put numbers back on them.
+
+**Single-user by design.** Nothing in the server knows which customer a
+request is from: one vault, one calendar, one memory file, one journal, all
+set by environment variables for the whole process. Selling it as a hosted
+subscription means threading an identity through `brain.ts`, `userMemory.ts`,
+`journal.ts`, `projects.ts`, `calendar.ts` and the caches in `api/cards`, and
+moving storage from folders to per-customer storage. It is also not deployable
+to a serverless host as it stands: it spawns a Python process for the voice,
+and reads the owner's disk. The decided route to first revenue is a personal
+installation, not a subscription.
+
+**Before any sale:** the repository is public and contains pricing under
+`marketing/`; close it. Set `HOLOVANT_ACCESS_TOKEN`.
+
 ## Running it
 
 For work on it:
