@@ -5,9 +5,9 @@ import { useOrbitStore } from "@/stores/orbitStore";
 import { ensureAudio, playBlip } from "@/audio/audioStore";
 import { getSpeechRecognition, type SpeechRecognitionLike } from "./speechTypes";
 import { matchIntent, replyFor } from "./commandEngine";
-import { isEchoOfSpeech } from "./echo";
+import { isEchoOfSpeech, isTailOfSpeech } from "./echo";
 import { looksLikeFailedCommand } from "./failedCommand";
-import { isStopCommand, withoutStopWords } from "./stopWords";
+import { afterStop, isStopCommand, withoutStopWords } from "./stopWords";
 import { recoveryFor } from "./recognitionRecovery";
 
 /** The language the recogniser runs in, without waiting for it to start. */
@@ -92,6 +92,21 @@ export function useVoiceCommands() {
   const unduckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The collection last played from, so "дальше" stays inside it. */
   const lastPlaylist = useRef<string | null>(null);
+  /** When "стоп" was last acted on, so its final transcript is not answered twice. */
+  const lastStopAt = useRef(0);
+
+  /**
+   * Says on screen why something heard was not acted on.
+   *
+   * Every discarded phrase used to vanish without trace, and "it does not
+   * answer" was all anyone could report. A reason he can read back turns that
+   * into something that can be fixed.
+   */
+  const showDropped = useCallback((reason: string) => {
+    setLastCommand(reason);
+    if (clearTimer.current) clearTimeout(clearTimer.current);
+    clearTimer.current = setTimeout(() => setLastCommand(null), COMMAND_DISPLAY_MS);
+  }, []);
   /** Errors in a row with no result between them; reset the moment one lands. */
   const failures = useRef(0);
   /** Set while waiting out a backoff, so onend does not restart underneath it. */
@@ -155,9 +170,14 @@ export function useVoiceCommands() {
       // every word of the second question was in the first answer, so it was
       // discarded in silence. Echo is already handled where it happens — the
       // recogniser ignores what it hears while the assistant speaks.
+      // A new question while an answer is still coming used to be dropped in
+      // silence, so asking again looked like being ignored. He has moved on:
+      // the old answer stops and the new question is asked. Echo never gets
+      // this far — it is filtered where the transcript arrives.
       const chatStatus = useChatStore.getState().status;
       if (chatStatus === "thinking" || chatStatus === "streaming" || isSystemSpeaking()) {
-        return;
+        stopSpeaking();
+        stopAnswer();
       }
 
       // Otherwise it is a question for the assistant.
@@ -385,10 +405,16 @@ export function useVoiceCommands() {
   }, []);
 
   /**
-   * "стоп" — cut the voice and the answer that is still streaming, and say
-   * nothing back. The point of the word is silence; a spoken "ок" defeats it.
+   * "стоп" — cut the voice and the answer that is still streaming.
+   *
+   * It used to say nothing back, on the reasoning that the point of the word
+   * is silence. From across the room silence cannot be told from not having
+   * been heard, so he said it again while it carried on, and asked for it
+   * plainly: stop at once and say «Да, слушаю вас». A key press still stops in
+   * silence; only the spoken word is answered.
    */
-  const handleStop = useCallback((lang: SpeechLang) => {
+  const handleStop = useCallback((lang: SpeechLang, acknowledge = false) => {
+    lastStopAt.current = Date.now();
     stopSpeaking();
     stopAnswer();
     clearChat();
@@ -404,6 +430,9 @@ export function useVoiceCommands() {
     deafUntil.current = Date.now() + AFTER_STOP_DEAF_MS;
     if (clearTimer.current) clearTimeout(clearTimer.current);
     clearTimer.current = setTimeout(() => setLastCommand(null), COMMAND_DISPLAY_MS);
+    // One of the everyday lines, synthesised in advance, so it is heard at
+    // once rather than after a round trip to the voice.
+    if (acknowledge) speak(lang === "ru" ? "Да, слушаю вас" : "Yes, I'm listening", lang);
   }, []);
 
   const enable = useCallback(() => {
@@ -460,17 +489,23 @@ export function useVoiceCommands() {
         // "стоп" is honoured immediately, even from a partial result, so a long
         // answer stops the moment the word is heard rather than after it.
         if (isStopCommand(text)) {
-          handleStop(lang);
-
           // A phrase can carry two orders. He said "стоп и закрой лицо" and the
           // voice stopped with the face still up: stopping returned here and
-          // the rest of the sentence was never read.
-          //
-          // Only a recognised command is run, never the remainder as a
-          // question — "стоп" means be quiet, and handing what is left to the
-          // model would have it answer back.
+          // the rest of the sentence was never read. What to do with the rest
+          // is decided in afterStop, where it is tested.
           const rest = withoutStopWords(text);
-          if (rest && matchIntent(rest)) runIntent(rest, lang);
+          const next = afterStop({
+            rest,
+            restIsCommand: Boolean(rest && matchIntent(rest)),
+            restIsEcho: Boolean(rest) && (isTailOfSpeech(rest, recentSpokenText()) || isOwnEcho(rest)),
+            isFinal: result.isFinal,
+            msSinceLastStop: Date.now() - lastStopAt.current,
+          });
+          handleStop(lang, next === "acknowledge");
+          if (next === "command" || next === "question") {
+            setTranscript(rest);
+            runIntent(rest, lang);
+          }
           return;
         }
 
@@ -491,10 +526,22 @@ export function useVoiceCommands() {
           stopSpeaking();
         } else if (!intent) {
           // A question, with the voice just stopped. The tail of what was said
-          // is still arriving; nothing said this soon is treated as a question.
+          // is still arriving, so for a moment its own last words come back.
+          // Everything in that moment used to be thrown away — and with it any
+          // short question asked straight after an answer: "что ты умеешь"
+          // fits inside the window whole and vanished. Now only the tail is
+          // dropped, recognised by being the assistant's own words in its
+          // own order; see echo.ts.
           const since = msSinceSpeechEnded();
-          if (since < QUIET_AFTER_SPEECH_MS) continue;
-          if (since < ECHO_WINDOW_MS && isOwnEcho(text)) continue;
+          const echo =
+            (since < QUIET_AFTER_SPEECH_MS && isTailOfSpeech(text, recentSpokenText())) ||
+            (since < ECHO_WINDOW_MS && isOwnEcho(text));
+          if (echo) {
+            // Said on screen, so "it did not answer" can be told from "it
+            // heard its own voice and rightly ignored it".
+            showDropped(lang === "ru" ? "своё эхо, пропущено" : "own echo, ignored");
+            continue;
+          }
         }
 
         setTranscript(text);
@@ -559,7 +606,7 @@ export function useVoiceCommands() {
       recognitionRef.current = null;
       setVoiceError("Could not start listening.");
     }
-  }, [runIntent, handleStop]);
+  }, [runIntent, handleStop, showDropped]);
 
   const disable = useCallback(() => {
     wantsRunning.current = false;

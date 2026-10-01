@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEchoOfSpeech } from "./echo";
+import { isEchoOfSpeech, isTailOfSpeech } from "./echo";
 
 /**
  * The rule that stops the circling.
@@ -32,6 +32,11 @@ const SPOKEN = {
     "Кадров двадцать, сцена не держит темп, качество снижено до низкого. Сервисы пять из пяти на связи.",
   rate: "Курс доллара к гривне сейчас сорок четыре и пятьдесят семь гривны за доллар.",
   weather: "В Киеве сейчас двадцать два градуса, почти ясно, ветер восемь километров в час.",
+  // His real exchange, 2026-09-30: the assistant's actual answer about projects.
+  projects:
+    "Открыл модуль проектов. По заметкам у вас шесть активных: Serenity Spa CRM, NexusOS Business с Control OS как пультом, Deye, Улучшатель промтов.",
+  alanya: "Сейчас в Аланье двадцать семь градусов, ощущается как тридцать один, пасмурно и почти без ветра.",
+  greeting: "Доброе утро. Сегодня в Аланье двадцать восемь градусов, встреч в календаре нет. Готов к работе, сэр.",
 };
 
 /**
@@ -57,6 +62,15 @@ const MUST_ACT: Array<[said: string, whileSpeaking: string]> = [
   ["а какой прогноз на завтра", SPOKEN.weather],
   ["почему он так вырос", SPOKEN.rate],
   ["а в долларах сколько это", SPOKEN.rate],
+  // Reported 2026-10-01: "Я спрашиваю, какие у нас есть проекты, он вообще
+  // ничего не отвечает." The old check matched words as substrings of the
+  // whole answer — "есть" inside "шесть", "проекты" against "проектов" — and
+  // half the words agreeing was enough to throw his question away as echo.
+  ["какие у нас есть проекты", SPOKEN.projects],
+  ["какие у нас сейчас есть проекты", SPOKEN.projects],
+  ["что ты умеешь", SPOKEN.projects],
+  ["а какая погода будет завтра в аланье", SPOKEN.alanya],
+  ["сколько градусов будет вечером в аланье", SPOKEN.alanya],
 ];
 
 /**
@@ -96,4 +110,48 @@ describe("with nothing spoken, nothing is an echo", () => {
       expect(isEchoOfSpeech(said, ""), said).toBe(false);
     }
   });
+});
+
+/**
+ * The second or two right after the assistant stops.
+ *
+ * The recogniser hands over the transcript of the assistant's own last words
+ * a second or two after the audio ends — "к работе сэр" — and taken as a
+ * question it starts a conversation with itself. So everything heard in that
+ * window used to be thrown away. Which also threw away every short question
+ * asked straight after an answer: "что ты умеешь" fits inside that window
+ * whole, and simply vanished.
+ *
+ * What separates the two is order. The tail is the assistant's own last words,
+ * in the order it said them. His question is not a run of its words at all.
+ */
+const TAIL_MUST_IGNORE: Array<[heard: string, justSaid: string]> = [
+  ["к работе сэр", SPOKEN.greeting],
+  ["работе сэр", SPOKEN.greeting],
+  ["готов к работе", SPOKEN.greeting],
+  ["пасмурно и почти без ветра", SPOKEN.alanya],
+  ["почти без ветра", SPOKEN.alanya],
+  ["на связи", SPOKEN.system],
+];
+
+const TAIL_MUST_ACT: Array<[said: string, justSaid: string]> = [
+  ["что ты умеешь", SPOKEN.greeting],
+  ["какие у нас есть проекты", SPOKEN.greeting],
+  ["какие у нас есть проекты", SPOKEN.projects],
+  ["что нового", SPOKEN.alanya],
+  ["а завтра", SPOKEN.alanya],
+  ["курс лиры", SPOKEN.alanya],
+];
+
+describe("right after it stops talking", () => {
+  for (const [heard, justSaid] of TAIL_MUST_IGNORE) {
+    it(`ignores the tail “${heard}”`, () => {
+      expect(isTailOfSpeech(heard, justSaid), heard).toBe(true);
+    });
+  }
+  for (const [said, justSaid] of TAIL_MUST_ACT) {
+    it(`hears his question “${said}”`, () => {
+      expect(isTailOfSpeech(said, justSaid), said).toBe(false);
+    });
+  }
 });

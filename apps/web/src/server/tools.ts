@@ -23,6 +23,19 @@ import {
   setUserPlace,
 } from "./userMemory";
 import { isSafeUrl, type QueuedAction } from "./actionTypes";
+import { fetchRates, formatRate } from "./rates";
+import { describeAge, listProjects } from "./projects";
+import { fetchFootball } from "./football";
+
+/** The rate rows by what they are, since two are both labelled "Доллар". */
+const RATE_NAMES: Record<string, string> = {
+  "usd-try": "USD in Turkish lira",
+  "eur-try": "EUR in Turkish lira",
+  "usd-uah": "USD in Ukrainian hryvnia",
+  "eur-usd": "EUR in US dollars",
+  gold: "Gold, per troy ounce",
+  btc: "Bitcoin",
+};
 
 export interface ToolDefinition {
   type: "function";
@@ -104,9 +117,13 @@ export function toolsFor(lang: "ru" | "en"): ToolDefinition[] {
       type: "function",
       function: {
         name: "get_current_time",
+        // It used to say "call this before any answer about the date, you do
+        // not otherwise know what day it is" — while the instructions now hand
+        // the model the date. Two contradicting orders; it obeyed this one,
+        // and paid a whole round to the model to learn what it had been told.
         description:
-          "The date and time right now. Call this before any answer that depends on today's " +
-          "date — you do not otherwise know what day it is.",
+          "The time in another timezone. Today's date, the time and the user's city are already " +
+          "in your instructions — do not call this for those.",
         parameters: { type: "object", properties: {} },
       },
     },
@@ -236,6 +253,45 @@ export function toolsFor(lang: "ru" | "en"): ToolDefinition[] {
     });
   }
 
+  // The cards' own data, readable by voice. Without these the model answered
+  // "какой курс доллара" from a web search — eight seconds, and figures that
+  // did not match the card on screen — and "какие у нас проекты" from old
+  // notes instead of the repositories the Projects card shows.
+  tools.push(
+    {
+      type: "function",
+      function: {
+        name: "get_rates",
+        description:
+          "The exchange rates on the user's Rates card: USD and EUR in Turkish lira, USD in " +
+          "hryvnia, EUR in dollars, gold and bitcoin in dollars. Use for any question about " +
+          "these instead of a web search: it is faster and matches what is on screen.",
+        parameters: { type: "object", properties: {} },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "list_projects",
+        description:
+          "The user's software projects: the git repositories on their machine, each with its " +
+          "branch, when it was last changed and how many files are uncommitted. Use when they " +
+          "ask about their projects or what they were working on.",
+        parameters: { type: "object", properties: {} },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "get_football",
+        description:
+          "The Turkish Süper Lig table and the next fixtures, including the Istanbul clubs' " +
+          "Champions League matches. Use for any question about Turkish football.",
+        parameters: { type: "object", properties: {} },
+      },
+    },
+  );
+
   // Nothing to say about the language yet, but the signature takes it so a
   // localised description can be added without changing every call site.
   void lang;
@@ -295,6 +351,48 @@ export async function runTool(name: string, rawArgs: string): Promise<string> {
           `ISO: ${now.toISOString()}`,
           `Local: ${now.toLocaleString("ru-RU", { dateStyle: "full", timeStyle: "short" })}`,
         ].join("\n");
+      }
+
+      case "get_rates": {
+        const report = await fetchRates();
+        if (report.state !== "ok") return "The rates source could not be reached. Say so; do not guess.";
+        return report.rows
+          .map((row) => `${RATE_NAMES[row.id] ?? row.label}: ${formatRate(row)} ${row.unit}`)
+          .join("\n");
+      }
+
+      case "list_projects": {
+        const repos = await listProjects().catch(() => null);
+        if (!repos) return "No projects folder is set, so the projects cannot be listed. Say so.";
+        if (!repos.length) return "The projects folder has no git repositories in it.";
+        return repos
+          .map((repo) => {
+            const changes =
+              repo.uncommitted === null
+                ? ""
+                : repo.uncommitted === 0
+                  ? ", nothing uncommitted"
+                  : `, ${repo.uncommitted} uncommitted files`;
+            return `${repo.name}: branch ${repo.branch ?? "unknown"}, last changed ${describeAge(repo.ageSeconds)}${changes}`;
+          })
+          .join("\n");
+      }
+
+      case "get_football": {
+        const football = await fetchFootball();
+        if (football.state !== "ok") return "The football source could not be reached. Say so.";
+        const table = football.table
+          .map((row) => `${row.rank}. ${row.team} — ${row.points} pts from ${row.played}`)
+          .join("\n");
+        const next = football.next.map((f) => `${f.at ?? "date unknown"}: ${f.title} (${f.competition})`).join("\n");
+        return [
+          `Süper Lig ${football.season ?? ""}${football.partial ? ", top of the table only" : ""}:`,
+          table,
+          next ? `Next fixtures:\n${next}` : "No fixtures scheduled yet.",
+          football.last?.score ? `Last result: ${football.last.title} ${football.last.score}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
       }
 
       case "search_notes": {

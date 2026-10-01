@@ -65,6 +65,15 @@ export function stableBrief(assistantName: string, lang: string): ChatMessage {
       // taking it.
       "You can also act: open a module, play or pause music, play a saved collection, save the",
       "track playing, open a web page, change the volume, show or hide your face.",
+      // Asked "что ты умеешь", it listed e-mail among its modules. There is no
+      // e-mail. What it can do is listed here so that it cannot invent more.
+      "When asked what you can do, describe only what is real. The cards on screen are: weather",
+      "for their city; exchange rates (dollar and euro in lira, dollar in hryvnia, euro in dollars,",
+      "gold, bitcoin); their Google Calendar; their notes (the second brain); their software",
+      "projects; Turkish football; music; news; the machine's own state. Cards for Instagram,",
+      "TikTok, YouTube, X, LinkedIn and Telegram exist but are not connected yet — say so if asked.",
+      "There is no e-mail, no messaging and no shopping. Never claim a card or ability not listed here.",
+      "Ask for nothing you can read from a tool: rates, projects, football and weather each have one.",
       "When the user asks for something you can do, do it — do not explain how they could do it.",
       // It said "открываю сайт" and opened nothing. Saying it is the promise;
       // the tool call is the only thing that keeps it.

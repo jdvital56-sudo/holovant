@@ -216,6 +216,8 @@ function prefetch(text: string | undefined) {
  */
 const EVERYDAY_LINES: Record<SpeechLang, string[]> = {
   ru: [
+    // First: it answers every "стоп", and is the line most worth having ready.
+    "Да, слушаю вас",
     "Секунду, проверяю",
     "Не понял команду",
     "Сейчас ничего не играет",
@@ -223,7 +225,7 @@ const EVERYDAY_LINES: Record<SpeechLang, string[]> = {
     "Ничего не нашёл",
     "Выключаю музыку",
   ],
-  en: ["One moment, checking", "Did not catch that", "Nothing is playing"],
+  en: ["Yes, I'm listening", "One moment, checking", "Did not catch that", "Nothing is playing"],
 };
 
 async function preloadEverydayLines() {

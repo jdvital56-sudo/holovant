@@ -32,6 +32,16 @@ describe("the part that is the same every time", () => {
     expect(text).toContain("given to you in the next message");
   });
 
+  it("says what it can really do, so it cannot invent e-mail again", () => {
+    // Asked "что ты умеешь", it listed e-mail among its modules. There is none.
+    const text = String(stableBrief("Тор", "ru").content);
+    expect(text).toContain("There is no e-mail");
+    expect(text).toContain("not connected yet");
+    for (const card of ["weather", "exchange rates", "Google Calendar", "projects", "Turkish football"]) {
+      expect(text, card).toContain(card);
+    }
+  });
+
   it("still carries the rules that must never be lost in a refactor", () => {
     // The direction that matters most: moving text between files is how a
     // guard quietly disappears.
