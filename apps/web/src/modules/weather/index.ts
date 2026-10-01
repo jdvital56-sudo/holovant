@@ -37,20 +37,24 @@ export const weatherModule: ModuleDefinition<WeatherSnapshot> = {
   }),
   toMetrics: (d) => {
     if (d.state === "no-place") {
+      // The first row is the card's figure: a dash, with the reason under it.
       return [
+        { label: "город не указан", value: UNKNOWN },
         { label: "Город", value: "не указан — скажите, где вы" },
-        { label: "Температура", value: UNKNOWN },
       ];
     }
     if (d.state === "unreachable") {
       return [
+        { label: "прогноз недоступен", value: UNKNOWN },
         { label: "Город", value: d.place ?? UNKNOWN },
         { label: "Температура", value: "не удалось получить" },
       ];
     }
+    // The temperature is the figure on the card face. It used to be the city,
+    // "Аланья, Турция" in the largest type on screen, with the 23° under it
+    // in small print — the one thing anyone looks at a weather card for.
     return [
-      { label: "Город", value: d.place ?? UNKNOWN },
-      { label: "Температура", value: `${d.temperatureC}°C` },
+      { label: d.place ?? "сейчас", value: `${d.temperatureC}°C` },
       { label: "Небо", value: d.condition ? SKY_RU[d.condition] : UNKNOWN },
       { label: "Сегодня", value: `от ${d.low}°C до ${d.high}°C` },
     ];

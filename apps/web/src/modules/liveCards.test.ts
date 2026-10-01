@@ -39,7 +39,16 @@ describe("the weather card", () => {
   it("shows the real temperature for the city he named", () => {
     const metrics = weatherModule.toMetrics(known);
     expect(metrics.some((m) => m.value.includes("34"))).toBe(true);
-    expect(metrics.some((m) => m.value.includes("Аланья"))).toBe(true);
+    // The city is the caption under the figure now, not the figure itself.
+    expect(metrics.some((m) => m.value.includes("Аланья") || m.label.includes("Аланья"))).toBe(true);
+  });
+
+  it("makes the temperature the figure on the card face", () => {
+    // The face shows the first row in its largest type. It was "Аланья,
+    // Турция", with the temperature in small print underneath.
+    const [figure] = weatherModule.toMetrics(known);
+    expect(figure.value).toContain("34");
+    expect(figure.label).toContain("Аланья");
   });
 
   it("shows no number at all when he has not said where he is", () => {

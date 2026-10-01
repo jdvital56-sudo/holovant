@@ -102,7 +102,14 @@ export const sportsModule: ModuleDefinition<SportsSnapshot> = {
       ? `${next.title}${kickoff(next.at) ? `, ${kickoff(next.at)}` : ""}`
       : "нет в расписании";
 
+    // The leader's points are the card's figure. It was the season, "2026-2027",
+    // which is true all year and tells nobody anything.
+    const [leader] = d.table;
     return [
+      {
+        label: `лидер · ${leader.team}`,
+        value: `${leader.points} ${pluralRu(leader.points, ["очко", "очка", "очков"])}`,
+      },
       { label: heading, value: d.season ?? UNKNOWN },
       ...rows,
       { label: "Ближайший матч", value: nextLine },

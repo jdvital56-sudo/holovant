@@ -26,6 +26,14 @@ export const aiModule: ModuleDefinition<AiSnapshot> = {
     searchConfigured: false,
   }),
   toMetrics: (d) => [
+    // The figure on the card face. It was the model's name — "deepseek-chat",
+    // the largest text on screen — which tells a buyer the supplier and
+    // nothing about whether the assistant can do its job. How much of it is
+    // connected does.
+    {
+      label: "подключено",
+      value: `${[d.configured, d.voice === "piper", d.searchConfigured].filter(Boolean).length} из 3`,
+    },
     { label: "Модель", value: d.configured ? (d.model ?? "настроена") : "не настроена — нет ключа" },
     { label: "Голос", value: d.voice === "piper" ? "свой, на сервере" : "браузерный" },
     { label: "Поиск", value: d.searchConfigured ? "подключён" : "нет ключа" },
@@ -42,7 +50,12 @@ export const aiModule: ModuleDefinition<AiSnapshot> = {
     const tips =
       lang === "ru"
         ? [
-            `Отвечает ${d.model ?? "модель"}, голос ${d.voice === "piper" ? "свой" : "браузерный"}`,
+            // Spoken, so no model name: "deepseek-chat" read by a Russian voice
+            // comes out as a mumble. The name stays on the card, where it can
+            // be read.
+            d.searchConfigured && d.voice === "piper"
+              ? "Всё подключено: модель, свой голос и поиск"
+              : `Модель на связи, голос ${d.voice === "piper" ? "свой" : "браузерный"}`,
             d.searchConfigured
               ? "Поиск подключён — про сегодняшнее спрашивайте смело"
               : "Поиск не подключён: про сегодняшнее ответить будет нечем",
