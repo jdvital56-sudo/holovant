@@ -9,8 +9,13 @@ Read this section first; the rest of the file is older and some of it is
 history. 660 unit tests, plus two browser suites that drive the real page.
 
 **Run it** with `pnpm --filter web build` then `pnpm --filter web start` from
-the repository root. Port 3000, bound to 127.0.0.1. It does not survive a
-reboot unless a Windows startup task is set up.
+the repository root. Port 3000, bound to 127.0.0.1. A Windows scheduled task named
+"Holovant" runs `scripts/serve.ps1` at logon, which starts the server and starts
+it again ten seconds after any exit; the log is `serve.log`. Proven by killing
+the process twice. To reinstall it on another machine, register a task that runs
+`powershell -NoProfile -WindowStyle Hidden -File scripts\serve.ps1` at logon.
+Rebuild with `pnpm --filter web build` after code changes; the script serves
+whatever is built.
 
 **Check it** with `typecheck`, `lint`, `test`, and — against a started server —
 `pnpm --filter web e2e:voice` (18 checks) and `e2e:ui` (6). Both need
