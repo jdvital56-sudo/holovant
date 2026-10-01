@@ -8,7 +8,8 @@
     "start": "next start -H 127.0.0.1",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e:voice": "node e2e/voice.e2e.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -46,6 +47,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "playwright-core": "1.57.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.11"
