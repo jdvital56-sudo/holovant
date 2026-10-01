@@ -25,7 +25,7 @@ const SKY_RU: Record<NonNullable<WeatherSnapshot["condition"]>, string> = {
 export const weatherModule: ModuleDefinition<WeatherSnapshot> = {
   id: "weather",
   label: "Weather",
-  tagline: "Current conditions",
+  tagline: "Погода сейчас",
   themeColor: "#57bfe1",
   dataProvider: createCardProvider<WeatherSnapshot>("weather", {
     state: "unreachable",

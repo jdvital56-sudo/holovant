@@ -17,7 +17,7 @@ const UNKNOWN = "—";
 export const projectsModule: ModuleDefinition<ProjectsSnapshot> = {
   id: "projects",
   label: "Projects",
-  tagline: "Active builds",
+  tagline: "Ваши репозитории",
   themeColor: "#5fa1ec",
   dataProvider: createCardProvider<ProjectsSnapshot>("projects", {
     state: "not-connected",

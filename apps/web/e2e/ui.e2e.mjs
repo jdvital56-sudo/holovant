@@ -30,6 +30,11 @@ await page.waitForTimeout(1200);
 const afterClick = await orbit();
 check("клик по передней карточке открывает её", afterClick.expandedId !== null, `открыта: ${afterClick.expandedId}`);
 
+// The open panel must not call live data a sample. It did, on every card but
+// two, long after the samples were gone.
+const panelText = await page.evaluate(() => document.body.innerText);
+check("открытая карточка не называет живые данные образцом", !/sample data/i.test(panelText));
+
 // 2. Escape closes it.
 await page.keyboard.press("Escape");
 await page.waitForTimeout(1000);

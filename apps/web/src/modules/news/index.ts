@@ -37,7 +37,7 @@ const newsProvider: ModuleDataProvider<NewsSnapshot> = {
 export const newsModule: ModuleDefinition<NewsSnapshot> = {
   id: "news",
   label: "News",
-  tagline: "Today's briefing",
+  tagline: "Новости по вашим темам",
   themeColor: "#52d1d9",
   dataProvider: newsProvider,
   toMetrics: (d) => {

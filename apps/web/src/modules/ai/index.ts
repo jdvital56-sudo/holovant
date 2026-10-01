@@ -17,7 +17,7 @@ const UNKNOWN = "—";
 export const aiModule: ModuleDefinition<AiSnapshot> = {
   id: "ai",
   label: "AI",
-  tagline: "Knowledge & reasoning",
+  tagline: "Ассистент и его возможности",
   themeColor: "#54c8dd",
   dataProvider: createCardProvider<AiSnapshot>("ai", {
     model: null,

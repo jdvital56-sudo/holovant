@@ -17,7 +17,7 @@ export type SystemSnapshot = CardsSystem;
 export const systemModule: ModuleDefinition<SystemSnapshot> = {
   id: "system",
   label: "System",
-  tagline: "Diagnostics",
+  tagline: "Состояние машины",
   themeColor: "#4ed0bf",
   dataProvider: createCardProvider<SystemSnapshot>("system", {
     platform: "—",

@@ -19,7 +19,7 @@ export interface MusicSnapshot {
 export const musicModule: ModuleDefinition<MusicSnapshot> = {
   id: "music",
   label: "Music",
-  tagline: "Now playing",
+  tagline: "Сейчас играет",
   themeColor: "#50d5cf",
   dataProvider: {
     getSnapshot: () => {

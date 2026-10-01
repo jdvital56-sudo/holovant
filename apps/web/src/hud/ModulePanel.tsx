@@ -195,7 +195,7 @@ export function ModulePanel() {
           {tips.length > 0 && (
             <div className="mt-6">
               <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-mist">
-                What to do about it
+                Что с этим делать
               </div>
               <ul className="space-y-2">
                 {tips.map((tip) => (
@@ -211,11 +211,11 @@ export function ModulePanel() {
             </div>
           )}
 
-          {activeModule.id !== "weather" && activeModule.id !== "system" && (
-            <p className="mt-5 font-mono text-[10px] leading-relaxed text-mist/70">
-              Sample data — live {activeModule.label} connection arrives with the integrations phase.
-            </p>
-          )}
+          {/* There was a line here, on every card but two, saying the data was
+              a sample and the real connection would come later. It outlived
+              the samples: rates, calendar, notes, projects and football all
+              read live sources now, and the panel was telling a buyer they
+              were fake. A card that is not connected says so itself. */}
         </motion.div>
       )}
     </AnimatePresence>

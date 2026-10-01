@@ -17,7 +17,7 @@ export type StocksSnapshot = CardsRates;
 export const stocksModule: ModuleDefinition<StocksSnapshot> = {
   id: "stocks",
   label: "Rates",
-  tagline: "Currencies, gold, bitcoin",
+  tagline: "Валюты, золото, биткоин",
   themeColor: "#63c8a0",
   dataProvider: createCardProvider<StocksSnapshot>("rates", { state: "unreachable", rows: [] }),
   toMetrics: (d) => {

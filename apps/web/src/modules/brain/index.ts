@@ -18,7 +18,7 @@ const UNKNOWN = "—";
 export const brainModule: ModuleDefinition<BrainSnapshot> = {
   id: "brain",
   label: "Second Brain",
-  tagline: "Your own knowledge",
+  tagline: "Ваши заметки",
   themeColor: "#a978ff",
   dataProvider: createCardProvider<BrainSnapshot>("brain", {
     state: "not-connected",

@@ -19,7 +19,7 @@ const UNKNOWN = "—";
 export const calendarModule: ModuleDefinition<CalendarSnapshot> = {
   id: "calendar",
   label: "Calendar",
-  tagline: "Today's schedule",
+  tagline: "Встречи на сегодня",
   themeColor: "#59b5e5",
   dataProvider: createCardProvider<CalendarSnapshot>("calendar", {
     state: "unreachable",
