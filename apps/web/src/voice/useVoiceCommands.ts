@@ -8,6 +8,21 @@ import { matchIntent, replyFor } from "./commandEngine";
 import { isEchoOfSpeech, isTailOfSpeech } from "./echo";
 import { looksLikeFailedCommand } from "./failedCommand";
 import { afterStop, isStopCommand, withoutStopWords } from "./stopWords";
+import {
+  canActOnPartial,
+  commandAtEnd,
+  intentKey,
+  isRepeatOf,
+  SETTLE_MS,
+  type RunRecord,
+} from "./settledCommand";
+
+/**
+ * What counts as "what it is saying now" when checking a command heard over
+ * its voice. Short on purpose: its words from a minute ago must not stop him
+ * using the same word now.
+ */
+const SAYING_NOW_MS = 8000;
 import { recoveryFor } from "./recognitionRecovery";
 
 /** The language the recogniser runs in, without waiting for it to start. */
@@ -21,6 +36,7 @@ import {
   applyVolumeNow,
   isSystemSpeaking,
   recentSpokenText,
+  spokenWithin,
   msSinceSpeechEnded,
   type SpeechLang,
 } from "./speech";
@@ -94,6 +110,9 @@ export function useVoiceCommands() {
   const lastPlaylist = useRef<string | null>(null);
   /** When "стоп" was last acted on, so its final transcript is not answered twice. */
   const lastStopAt = useRef(0);
+  /** A partial command waiting to hold still, and the last command carried out. */
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRun = useRef<RunRecord | null>(null);
 
   /**
    * Says on screen why something heard was not acted on.
@@ -405,6 +424,28 @@ export function useVoiceCommands() {
   }, []);
 
   /**
+   * Carries out a command from a partial result once it has held still for
+   * SETTLE_MS. Called on every partial; a newer one replaces the wait.
+   */
+  const settle = useCallback(
+    (text: string, lang: SpeechLang) => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(() => {
+        settleTimer.current = null;
+        // It started talking meanwhile: leave this to the final transcript,
+        // where its own voice is checked for.
+        if (isSystemSpeaking()) return;
+        const intent = matchIntent(text);
+        if (!intent || isRepeatOf(lastRun.current, intent, Date.now())) return;
+        lastRun.current = { key: intentKey(intent), at: Date.now() };
+        setTranscript(text);
+        runIntent(text, lang);
+      }, SETTLE_MS);
+    },
+    [runIntent],
+  );
+
+  /**
    * "стоп" — cut the voice and the answer that is still streaming.
    *
    * It used to say nothing back, on the reasoning that the point of the word
@@ -414,6 +455,8 @@ export function useVoiceCommands() {
    * silence; only the spoken word is answered.
    */
   const handleStop = useCallback((lang: SpeechLang, acknowledge = false) => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = null;
     lastStopAt.current = Date.now();
     stopSpeaking();
     stopAnswer();
@@ -510,11 +553,46 @@ export function useVoiceCommands() {
         }
 
         if (!result.isFinal) {
-          if (!speakingNow) interim += text;
+          if (!speakingNow) {
+            interim += text;
+            // Over music the recogniser never hears silence and never
+            // finalises, so a command complete in itself is carried out once
+            // its partial holds still. See settledCommand.ts.
+            if (canActOnPartial(matchIntent(text))) settle(text, lang);
+            // He kept talking past the command: it is part of something
+            // longer, and the final transcript decides.
+            else if (settleTimer.current) {
+              clearTimeout(settleTimer.current);
+              settleTimer.current = null;
+            }
+          } else {
+            // Over its own voice the partial never holds still — its words
+            // keep arriving — so it never settles, and "убери лицо" waited
+            // until it had finished talking. He is in the last few words: a
+            // command there is acted on at once, unless those words are what
+            // it is saying itself.
+            const command = commandAtEnd(text);
+            const intent = command ? matchIntent(command) : null;
+            if (
+              command &&
+              !isTailOfSpeech(command, spokenWithin(SAYING_NOW_MS)) &&
+              !isRepeatOf(lastRun.current, intent, Date.now())
+            ) {
+              lastRun.current = { key: intentKey(intent!), at: Date.now() };
+              stopSpeaking();
+              setTranscript(command);
+              runIntent(command, lang);
+              return;
+            }
+          }
           continue;
         }
 
+        // The partial of this same command already ran it.
+        if (settleTimer.current) clearTimeout(settleTimer.current);
+        settleTimer.current = null;
         const intent = matchIntent(text);
+        if (isRepeatOf(lastRun.current, intent, Date.now())) continue;
 
         if (speakingNow) {
           // A command said over the top is obeyed immediately — waiting for a
@@ -544,6 +622,7 @@ export function useVoiceCommands() {
           }
         }
 
+        if (intent) lastRun.current = { key: intentKey(intent), at: Date.now() };
         setTranscript(text);
         runIntent(text, lang);
       }
@@ -606,7 +685,7 @@ export function useVoiceCommands() {
       recognitionRef.current = null;
       setVoiceError("Could not start listening.");
     }
-  }, [runIntent, handleStop, showDropped]);
+  }, [runIntent, handleStop, showDropped, settle]);
 
   const disable = useCallback(() => {
     wantsRunning.current = false;

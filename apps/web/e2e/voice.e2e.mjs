@@ -69,7 +69,9 @@ await page.route("**/api/chat", async (route) => {
   const body = JSON.parse(route.request().postData() ?? "{}");
   const question = body.messages?.at(-1)?.content ?? "";
   asked.push({ question, at: Date.now() });
-  const answer = question.includes("проект")
+  const answer = question.includes("остановить")
+    ? "Чтобы остановить музыку, скажите пауза. Чтобы продолжить, скажите продолжи. Это работает и поверх песни."
+    : question.includes("проект")
     ? "У вас четыре репозитория. Holovant на ветке master, менялся вчера. Nexus OS не трогался три недели. Gods eye view давно чист."
     : "Я открываю карточки, отвечаю на вопросы и ищу в ваших заметках. Готов к работе, сэр.";
   await route.fulfill({ status: 200, contentType: "text/plain; charset=utf-8", body: answer });
@@ -102,7 +104,7 @@ const waitSilence = async (ms = 30000) => {
   }
 };
 
-await page.goto(BASE);
+await page.goto(`${BASE}/?e2e`);
 await page.waitForTimeout(5000);
 await page.getByText(/VOICE/).first().click();
 // Let the everyday lines finish warming before speaking.
@@ -190,6 +192,83 @@ before = asked.length;
 await say("у вас четыре репозитория holovant на ветке master менялся вчера");
 await page.waitForTimeout(1500);
 check("свой ответ, услышанный через 3 секунды, не принят за вопрос", asked.length === before);
+
+// ---- Commands over music --------------------------------------------------
+// With music playing the recogniser never hears silence and never finalises,
+// so from here on most commands are said as partial results only — the way
+// they actually arrive over a song. Results are read from the app's own
+// state (?e2e), not from a label that is upper-cased and fades in 2.5 s.
+
+const state = (key) => page.evaluate((k) => window.__holovant[k](), key);
+const until = async (fn, ms = 2000) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (await fn()) return true;
+    await page.waitForTimeout(100);
+  }
+  return false;
+};
+
+await waitSilence();
+await page.waitForTimeout(2500);
+
+const musicAsked = [];
+page.on("request", (r) => r.url().includes("/api/music") && musicAsked.push(r.url()));
+await say("включи Океан Ельзи Обійми", true);
+check("«включи Океан Ельзи» находит и ставит трек", await until(async () => (await state("playing")) === "ready", 8000), String(await state("playing")));
+await page.waitForTimeout(3000);
+
+await say("пауза", false);
+check("«пауза» под музыку срабатывает без окончательной расшифровки", await until(async () => (await state("paused")) === true, 2000));
+
+await page.waitForTimeout(1500);
+const volumeBefore = await state("volume");
+await say("сделай громче", false);
+await until(async () => (await state("volume")) !== volumeBefore, 2000);
+const volumeOnce = await state("volume");
+await page.waitForTimeout(300);
+await say("сделай громче", true); // the final of the same words, arriving late
+await page.waitForTimeout(900);
+const volumeAfter = await state("volume");
+check(
+  "«сделай громче» срабатывает один раз, а не дважды",
+  volumeOnce > volumeBefore && volumeAfter === volumeOnce,
+  `${volumeBefore.toFixed(2)} → ${volumeOnce.toFixed(2)} → ${volumeAfter.toFixed(2)}`,
+);
+
+await page.waitForTimeout(1500);
+await say("открой погоду", false);
+check("«открой погоду» открывает карточку по промежуточному тексту", await until(async () => (await state("open")) === "weather", 2000));
+await page.waitForTimeout(1500);
+await say("закрой", false);
+check("«закрой» закрывает её", await until(async () => (await state("open")) === null, 2000), String(await state("open")));
+
+await page.waitForTimeout(1500);
+await say("покажи лицо", false);
+check("«покажи лицо» показывает лицо", await until(async () => (await state("face")) === true, 2500));
+await page.waitForTimeout(1500);
+await say("убери лицо", false);
+check("«убери лицо» убирает его", await until(async () => (await state("face")) === false, 2500));
+
+// The other direction: a song title is never acted on half-said.
+await page.waitForTimeout(1500);
+const musicBefore = musicAsked.length;
+await say("включи океан", false);
+await page.waitForTimeout(1600);
+check("«включи океан» на полуслове музыку не запускает", musicAsked.length === musicBefore);
+
+// The most dangerous direction: its own voice naming a command. It explains
+// how to pause, the microphone hears "скажите пауза", and the music must not
+// pause because of what it said itself.
+await page.waitForTimeout(1500);
+await say("продолжи", true);
+await until(async () => (await state("paused")) === false, 2000);
+await page.waitForTimeout(1500);
+await say("как остановить музыку", true);
+await playingFor(300);
+await say("чтобы остановить музыку скажите пауза", false);
+await page.waitForTimeout(1200);
+check("его собственное «скажите пауза» музыку не останавливает", (await state("paused")) === false);
 
 const passed = rows.filter((r) => r.ok).length;
 console.log(JSON.stringify({ passed, total: rows.length }));

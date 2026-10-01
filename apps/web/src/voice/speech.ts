@@ -125,6 +125,15 @@ function rememberSpoken(text: string) {
   recentlySpoken = recentlySpoken.filter((r) => now - r.at < RECENT_WINDOW_MS);
 }
 
+/** What it said in the last `ms` milliseconds, lowercased: the line it is on now. */
+export function spokenWithin(ms: number): string {
+  const now = Date.now();
+  return recentlySpoken
+    .filter((r) => now - r.at < ms)
+    .map((r) => r.text)
+    .join(" ");
+}
+
 export function recentSpokenText(): string {
   const now = Date.now();
   return recentlySpoken

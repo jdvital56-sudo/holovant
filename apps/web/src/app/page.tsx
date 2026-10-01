@@ -3,6 +3,7 @@ import { HUD } from "@/hud/HUD";
 import { ModulePanel } from "@/hud/ModulePanel";
 import { SearchResults } from "@/hud/SearchResults";
 import { AssistantAnswer } from "@/hud/AssistantAnswer";
+import { TestProbe } from "@/hud/TestProbe";
 import { NowPlaying } from "@/hud/NowPlaying";
 import { VitaFaceVideo } from "@/hud/VitaFaceVideo";
 import { ActionTrail } from "@/hud/ActionTrail";
@@ -16,6 +17,7 @@ export default function Home() {
       <ModulePanel />
       <SearchResults />
       <AssistantAnswer />
+      <TestProbe />
       <NowPlaying />
       <ActionTrail />
       <div className="fixed top-4 sm:top-8 left-1/2 -translate-x-1/2 z-10 pointer-events-none text-center">
